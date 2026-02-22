@@ -1,0 +1,4 @@
+List of spec overview docs:
+https://github.com/botletics/SIM7000-LTE-Shield/tree/master/SIM7000%20Documentation/Spec%20Overview%20Docs
+
+Need to find which version of the board they have. Above github has extensive documentation.
