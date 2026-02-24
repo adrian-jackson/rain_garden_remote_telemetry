@@ -8,7 +8,7 @@
     -> using buck will have 1/2 input voltage (ensures output < input), but high current. boost will have 2*input voltage but lower current.
         -> so for charging buck is probably optimal. boost might be higher freq switching too. 
 -> setting up solar charger with TP4056:
-    -> need to know what size solar panel!
+    -> need to know what size solar panel! and its nominal operating voltage.
     -> need a way to monitor battery charge over time
         -> idea: use separately powered arduino to analog read the battery charge over time. connect to a laptop to store logging. maybe start with it unloaded, and then connect the load. 
             -> need to know if area is reachable with an extension cord or do we need battery power
