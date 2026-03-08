@@ -15,5 +15,5 @@ void loop() {
   voltage = raw_pos * 11 - raw_neg
   Serial.println(voltage);
 
-  delay(600000) //log every 10 mins
+  delay(1000) //log every 10 mins
 }
