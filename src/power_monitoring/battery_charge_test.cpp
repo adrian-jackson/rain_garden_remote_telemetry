@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 int POS_PIN = 1;
 int NEG_PIN = 2;
 
@@ -10,10 +12,10 @@ void setup() {
 }
 
 void loop() {
-  raw_pos = analogRead(POS_PIN);
-  raw_neg = analogRead(NEG_PIN);
-  voltage = raw_pos * 11 - raw_neg
+  int raw_pos = analogRead(POS_PIN);
+  int raw_neg = analogRead(NEG_PIN);
+  int voltage = raw_pos * 11 - raw_neg;
   Serial.println(voltage);
 
-  delay(1000) //log every 10 mins
+  delay(1000); //log every 10 mins
 }

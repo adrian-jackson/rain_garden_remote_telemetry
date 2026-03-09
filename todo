@@ -1,2 +1,1 @@
--> calculate power draw of components, especially SIM7000
--> voltage limiter after buck to protect arduino.
+-> unit testing https://docs.platformio.org/en/latest/tutorials/core/unit_testing_blink.html
