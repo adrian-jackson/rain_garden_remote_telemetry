@@ -15,7 +15,6 @@
 
 SoftwareSerial modemSS = SoftwareSerial(TX, RX);
 SoftwareSerial *modemSerial = &modemSS;
-SoftwareSerial simSerial(7, 8); // RX, TX — adjust to your wiring
 #if defined(SIMCOM_7000) || defined(SIMCOM_7070) || defined(SIMCOM_7500) || defined(SIMCOM_7600)
   Botletics_modem_LTE modem = Botletics_modem_LTE();
 #endif
@@ -28,8 +27,11 @@ char imei[16] = {0}; // MUST use a 16 character buffer for IMEI!
 bool GPS = false; //set to true if GPS is needed
 
 //battery monitoring
-int POS_BATT_PIN = 1;
-int NEG_BATT_PIN = 2;
+int POS_BATT_PIN = A1;
+int NEG_BATT_PIN = A2;
+
+//general
+bool serial_up = false;
 
 //note down starting time of program!
 //assuming voltage divider for positive terminal with 1k and 10kOhm resistor
@@ -37,7 +39,7 @@ int NEG_BATT_PIN = 2;
 int readVoltage() {
     int r1k_pos = analogRead(POS_BATT_PIN);
     int r1k_neg = analogRead(NEG_BATT_PIN);
-    return 11 * (5/1024) * (r1k_pos - r1k_neg);
+    return 11 * (5.0/1024.0) * (r1k_pos - r1k_neg);
 }
 
 void testSerial() {
@@ -863,7 +865,9 @@ void setup() {
     setupSim7000();
 
     //general
+    if(not serial_up){
     Serial.begin(9600);
+    }
 }
 
 void loop() {
