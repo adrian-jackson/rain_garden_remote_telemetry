@@ -58,30 +58,11 @@ void printSim7000Menu(void) {
   Serial.println(F("[n] Get network status"));
   Serial.println(F("[1] Get network connection info")); // See what connection type and band you're on!
 
-#if !defined(SIMCOM_7000) && !defined(SIMCOM_7070)
-  // Audio
-  Serial.println(F("[v] Set audio Volume"));
-  Serial.println(F("[V] Get volume"));
-  Serial.println(F("[H] Set headphone audio (SIM800/808)"));
-  Serial.println(F("[e] Set external audio (SIM800/808)"));
-  Serial.println(F("[T] Play audio Tone"));
-  Serial.println(F("[P] PWM/buzzer out (SIM800/808)"));
-#endif
-
   // Calling
   Serial.println(F("[c] Make phone Call"));
   Serial.println(F("[A] Get call status"));
   Serial.println(F("[h] Hang up phone"));
   Serial.println(F("[p] Pick up phone"));
-
-#ifdef SIMCOM_2G
-  // FM (SIM800 only!)
-  Serial.println(F("[f] Tune FM radio (SIM800)"));
-  Serial.println(F("[F] Turn off FM (SIM800)"));
-  Serial.println(F("[m] Set FM volume (SIM800)"));
-  Serial.println(F("[M] Get FM volume (SIM800)"));
-  Serial.println(F("[q] Get FM station signal level (SIM800)"));
-#endif
 
   // SMS
   Serial.println(F("[N] Number of SMS's"));
@@ -112,18 +93,7 @@ void printSim7000Menu(void) {
   Serial.println(F("[2] Post to Adafruit IO - 2G / LTE CAT-M / NB-IoT")); // SIM800/808/900/7000/7070
   Serial.println(F("[3] Post to Adafruit IO - 3G / 4G LTE")); // SIM5320/7500/7600
 
-  // GPS
-  if (type >= SIM808_V1) {
-    Serial.println(F("[O] Turn GPS on (SIM808/5320/7XX0)"));
-    Serial.println(F("[o] Turn GPS off (SIM808/5320/7XX0)"));
-    Serial.println(F("[L] Query GPS location (SIM808/5320/7XX0)"));
-    if (type == SIM808_V1) {
-      Serial.println(F("[x] GPS fix status (SIM808 v1 only)"));
-    }
-    Serial.println(F("[E] Raw NMEA out (SIM808)"));
-  }
-  
-  Serial.println(F("[S] Create serial passthru tunnel"));
+ 
   Serial.println(F("-------------------------------------"));
   Serial.println(F(""));
 }
@@ -571,96 +541,6 @@ void SIM7000loop() {
         break;
       }
 
-
-    /*********************************** GPS */
-
-    case 'o': {
-        // turn GPS off
-        if (!modem.enableGPS(false))
-          Serial.println(F("Failed to turn off"));
-        break;
-      }
-    case 'O': {
-        // turn GPS on
-        if (!modem.enableGPS(true))
-          Serial.println(F("Failed to turn on"));
-        break;
-      }
-    case 'x': {
-        int8_t stat;
-        // check GPS fix
-        stat = modem.GPSstatus();
-        if (stat < 0)
-          Serial.println(F("Failed to query"));
-        if (stat == 0) Serial.println(F("GPS off"));
-        if (stat == 1) Serial.println(F("No fix"));
-        if (stat == 2) Serial.println(F("2D fix"));
-        if (stat == 3) Serial.println(F("3D fix"));
-        break;
-      }
-
-    case 'L': {
-        /*
-        // Uncomment this block if all you want to see is the AT command response
-        // check for GPS location
-        char gpsdata[120];
-        modem.getGPS(0, gpsdata, 120);
-        if (type == SIM808_V1)
-          Serial.println(F("Reply in format: mode,longitude,latitude,altitude,utctime(yyyymmddHHMMSS),ttff,satellites,speed,course"));
-        else if ( (type == SIM5320A) || (type == SIM5320E) || (type == SIM7500) || (type == SIM7600) )
-          Serial.println(F("Reply in format: [<lat>],[<N/S>],[<lon>],[<E/W>],[<date>],[<UTC time>(yyyymmddHHMMSS)],[<alt>],[<speed>],[<course>]"));
-        else
-          Serial.println(F("Reply in format: mode,fixstatus,utctime(yyyymmddHHMMSS),latitude,longitude,altitude,speed,course,fixmode,reserved1,HDOP,PDOP,VDOP,reserved2,view_satellites,used_satellites,reserved3,C/N0max,HPA,VPA"));
-        
-        Serial.println(gpsdata);
-
-        break;
-        */
-
-        float latitude, longitude, speed_kph, heading, altitude, second;
-        uint16_t year;
-        uint8_t month, day, hour, minute;
-
-        // Use the top line if you want to parse UTC time data as well, the line below it if you don't care
-//        if (modem.getGPS(&latitude, &longitude, &speed_kph, &heading, &altitude, &year, &month, &day, &hour, &minute, &second)) {
-        if (modem.getGPS(&latitude, &longitude, &speed_kph, &heading, &altitude)) { // Use this line instead if you don't want UTC time
-          Serial.println(F("---------------------"));
-          Serial.print(F("Latitude: ")); Serial.println(latitude, 6);
-          Serial.print(F("Longitude: ")); Serial.println(longitude, 6);
-          Serial.print(F("Speed: ")); Serial.println(speed_kph);
-          Serial.print(F("Heading: ")); Serial.println(heading);
-          Serial.print(F("Altitude: ")); Serial.println(altitude);
-          // Comment out the stuff below if you don't care about UTC time
-          /*
-          Serial.print(F("Year: ")); Serial.println(year);
-          Serial.print(F("Month: ")); Serial.println(month);
-          Serial.print(F("Day: ")); Serial.println(day);
-          Serial.print(F("Hour: ")); Serial.println(hour);
-          Serial.print(F("Minute: ")); Serial.println(minute);
-          Serial.print(F("Second: ")); Serial.println(second);
-          Serial.println(F("---------------------"));
-          */
-        }
-
-        break;
-      }
-
-    case 'E': {
-        flushSerial();
-        if (type == SIM808_V1) {
-          Serial.print(F("GPS NMEA output sentences (0 = off, 34 = RMC+GGA, 255 = all)"));
-        } else {
-          Serial.print(F("On (1) or Off (0)? "));
-        }
-        uint8_t nmeaout = readnumber();
-
-        // turn on NMEA output
-        modem.enableGPSNMEA(nmeaout);
-
-        break;
-      }
-
-    /*********************************** GPRS */
 
     case 'g': {
         // disable data
