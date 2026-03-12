@@ -12,3 +12,6 @@
     -> need a way to monitor battery charge over time
         -> idea: use separately powered arduino to analog read the battery charge over time. connect to a laptop to store logging. maybe start with it unloaded, and then connect the load. 
             -> need to know if area is reachable with an extension cord or do we need battery power
+
+
+-> BUCK is set to 6.04 output V right now.

@@ -1,15 +1,17 @@
 import serial
 import csv
 import time
+from pathlib import Path
 
-arduino_port = 'COM'  #UPDATE!
-baud_rate = 9600 #UPDATE!
+arduino_port = 'COM5'  #UPDATE!
+baud_rate = 4800 #UPDATE!
 timeout = 60 #seconds
 programStartTime = time.time()
 hrsToRun = 12
-filename = f'battery_voltage_log_{time.time()}.csv'
+directory = Path('data') / 'power_monitoring'
+filename = directory / f'battery_voltage_log_{time.time()}.csv'
 
-with open(csv_file_name, mode='w', newline='') as csv_file:
+with open(filename, mode='w', newline='') as csv_file:
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(['Timestamp', 'Voltage'])
     while time.time() < programStartTime + hrsToRun * 60 * 60:
@@ -21,6 +23,7 @@ with open(csv_file_name, mode='w', newline='') as csv_file:
                     if ser.in_waiting > 0:  # Check if there is data to read
                         curr_voltage = ser.readline().decode('utf-8').rstrip()  # Read a line of data
                         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                        print(timestamp, curr_voltage)
                         csv_writer.writerow([timestamp, curr_voltage])
                         csv_file.flush()
                         time.sleep(10)

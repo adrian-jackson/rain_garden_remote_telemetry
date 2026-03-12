@@ -52,46 +52,33 @@ void printSim7000Menu(void) {
   Serial.println(F("[?] Print this menu"));
   Serial.println(F("[a] Read the ADC; 2.8V max for SIM800/808, 0V-VBAT for SIM7000 shield"));
   Serial.println(F("[b] Read supply voltage")); // Will also give battery % charged for most modules
-  Serial.println(F("[C] Read the SIM CCID"));
+//  Serial.println(F("[C] Read the SIM CCID"));
   Serial.println(F("[U] Unlock SIM with PIN code"));
   Serial.println(F("[i] Read signal strength (RSSI)"));
   Serial.println(F("[n] Get network status"));
   Serial.println(F("[1] Get network connection info")); // See what connection type and band you're on!
 
   // Calling
-  Serial.println(F("[c] Make phone Call"));
-  Serial.println(F("[A] Get call status"));
-  Serial.println(F("[h] Hang up phone"));
-  Serial.println(F("[p] Pick up phone"));
-
+  
   // SMS
-  Serial.println(F("[N] Number of SMS's"));
-  Serial.println(F("[r] Read SMS #"));
-  Serial.println(F("[R] Read all SMS"));
-  Serial.println(F("[d] Delete SMS #"));
-  Serial.println(F("[D] Delete all SMS"));
   Serial.println(F("[s] Send SMS"));
-  Serial.println(F("[u] Send USSD"));
   
   // Time
-  Serial.println(F("[y] Enable local time stamp (SIM800/808/70X0)"));
-  Serial.println(F("[Y] Enable NTP time sync (SIM800/808/70X0)")); // Need to use "G" command first!
   Serial.println(F("[t] Get network time")); // Works just by being connected to network
 
   // Data Connection
   Serial.println(F("[G] Enable cellular data"));
-  Serial.println(F("[g] Disable cellular data"));
-  Serial.println(F("[l] Query GSMLOC (2G)"));
+  //Serial.println(F("[g] Disable cellular data"));
 #if !defined(SIMCOM_3G) && !defined(SIMCOM_7500) && !defined(SIMCOM_7600)
-  Serial.println(F("[w] Read webpage"));
-  Serial.println(F("[W] Post to website"));
+  //Serial.println(F("[w] Read webpage"));
+  //Serial.println(F("[W] Post to website"));
 #endif
   // The following option below posts dummy data to dweet.io for demonstration purposes. See the
   // IoT_example sketch for an actual application of this function!
   // NOTE: dweet.io shut down in early 2025 and is no longer used as an example
   // To use the Adafruit IO example, please go to the code and input your own Adafruit IO username, key, and feed key
-  Serial.println(F("[2] Post to Adafruit IO - 2G / LTE CAT-M / NB-IoT")); // SIM800/808/900/7000/7070
-  Serial.println(F("[3] Post to Adafruit IO - 3G / 4G LTE")); // SIM5320/7500/7600
+  //Serial.println(F("[2] Post to Adafruit IO - 2G / LTE CAT-M / NB-IoT")); // SIM800/808/900/7000/7070
+  //Serial.println(F("[3] Post to Adafruit IO - 3G / 4G LTE")); // SIM5320/7500/7600
 
  
   Serial.println(F("-------------------------------------"));
@@ -283,14 +270,7 @@ void SIM7000loop() {
         break;
       }
 
-    case 'C': {
-        // read the CCID
-        modem.getSIMCCID(replybuffer);  // make sure replybuffer is at least 21 bytes!
-        Serial.print(F("SIM CCID = ")); Serial.println(replybuffer);
-        break;
-      }
-
-    case 'i': {
+      case 'i': {
         // read the RSSI
         uint8_t n = modem.getRSSI();
         int8_t r;
@@ -327,157 +307,7 @@ void SIM7000loop() {
         break;
       }
     
-    /*** Calling ***/
-    case 'c': {
-        // call a phone!
-        char number[30];
-        flushSerial();
-        Serial.print(F("Call #"));
-        readline(number, 30);
-        Serial.println();
-        Serial.print(F("Calling ")); Serial.println(number);
-        if (!modem.callPhone(number)) {
-          Serial.println(F("Failed"));
-        } else {
-          Serial.println(F("Sent!"));
-        }
-
-        break;
-      }
-    case 'A': {
-        // get call status
-        int8_t callstat = modem.getCallStatus();
-        switch (callstat) {
-          case 0: Serial.println(F("Ready")); break;
-          case 1: Serial.println(F("Could not get status")); break;
-          case 3: Serial.println(F("Ringing (incoming)")); break;
-          case 4: Serial.println(F("Ringing/in progress (outgoing)")); break;
-          default: Serial.println(F("Unknown")); break;
-        }
-        break;
-      }
-      
-    case 'h': {
-        // hang up!
-        if (! modem.hangUp()) {
-          Serial.println(F("Failed"));
-        } else {
-          Serial.println(F("OK!"));
-        }
-        break;
-      }
-
-    case 'p': {
-        // pick up!
-        if (! modem.pickUp()) {
-          Serial.println(F("Failed"));
-        } else {
-          Serial.println(F("OK!"));
-        }
-        break;
-      }
-
-      case 'N': {
-        // read the number of SMS's!
-        int8_t smsnum = modem.getNumSMS();
-        if (smsnum < 0) {
-          Serial.println(F("Could not read # SMS"));
-        } else {
-          Serial.print(smsnum);
-          Serial.println(F(" SMS's on SIM card!"));
-        }
-        break;
-      }
-    case 'r': {
-        // read an SMS
-        flushSerial();
-        Serial.print(F("Read #"));
-        uint8_t smsn = readnumber();
-        Serial.print(F("\n\rReading SMS #")); Serial.println(smsn);
-
-        // Retrieve SMS sender address/phone number.
-        if (! modem.getSMSSender(smsn, replybuffer, 250)) {
-          Serial.println("Failed!");
-          break;
-        }
-        Serial.print(F("FROM: ")); Serial.println(replybuffer);
-
-        // Retrieve SMS value.
-        uint16_t smslen;
-        if (! modem.readSMS(smsn, replybuffer, 250, &smslen)) { // pass in buffer and max len!
-          Serial.println("Failed!");
-          break;
-        }
-        Serial.print(F("***** SMS #")); Serial.print(smsn);
-        Serial.print(" ("); Serial.print(smslen); Serial.println(F(") bytes *****"));
-        Serial.println(replybuffer);
-        Serial.println(F("*****"));
-
-        break;
-      }
-    case 'R': {
-        // read all SMS
-        int8_t smsnum = modem.getNumSMS();
-        uint16_t smslen;
-        int8_t smsn;
-
-        if ( (type == SIM5320A) || (type == SIM5320E) || (type == SIM7000) || (type == SIM7070)) {
-          smsn = 0; // zero indexed
-          smsnum--;
-        } else {
-          smsn = 1;  // 1 indexed
-        }
-
-        for ( ; smsn <= smsnum; smsn++) {
-          Serial.print(F("\n\rReading SMS #")); Serial.println(smsn);
-          if (!modem.readSMS(smsn, replybuffer, 250, &smslen)) {  // pass in buffer and max len!
-            Serial.println(F("Failed!"));
-            break;
-          }
-          // if the length is zero, its a special case where the index number is higher
-          // so increase the max we'll look at!
-          if (smslen == 0) {
-            Serial.println(F("[empty slot]"));
-            smsnum++;
-            continue;
-          }
-
-          Serial.print(F("***** SMS #")); Serial.print(smsn);
-          Serial.print(" ("); Serial.print(smslen); Serial.println(F(") bytes *****"));
-          Serial.println(replybuffer);
-          Serial.println(F("*****"));
-        }
-        break;
-      }
-
-    case 'd': {
-        // Delete an SMS
-        flushSerial();
-        Serial.print(F("Delete #"));
-        uint8_t smsn = readnumber();
-
-        Serial.print(F("\n\rDeleting SMS #")); Serial.println(smsn);
-        if (modem.deleteSMS(smsn)) {
-          Serial.println(F("OK!"));
-        } else {
-          Serial.println(F("Couldn't delete"));
-        }
-        break;
-      }
-
-    case 'D': {
-        // Delete all SMS
-        flushSerial();
-        Serial.println(F("\n\rDeleting all SMS"));
-        if (modem.deleteAllSMS()) {
-          Serial.println(F("OK!"));
-        } else {
-          Serial.println(F("Couldn't delete"));
-        }
-        break;
-      }
-
-    case 's': {
+        case 's': {
         // send an SMS!
         char sendto[21], message[141];
         flushSerial();
@@ -496,51 +326,7 @@ void SIM7000loop() {
         break;
       }
 
-    case 'u': {
-      // send a USSD!
-      char message[141];
-      flushSerial();
-      Serial.print(F("Type out one-line message (140 char): "));
-      readline(message, 140);
-      Serial.println(message);
-
-      uint16_t ussdlen;
-      if (!modem.sendUSSD(message, replybuffer, 250, &ussdlen)) { // pass in buffer and max len!
-        Serial.println(F("Failed"));
-      } else {
-        Serial.println(F("Sent!"));
-        Serial.print(F("***** USSD Reply"));
-        Serial.print(" ("); Serial.print(ussdlen); Serial.println(F(") bytes *****"));
-        Serial.println(replybuffer);
-        Serial.println(F("*****"));
-      }
-    }
-
-    /*** Time ***/
-
-    case 'y': {
-        // enable network time sync
-        if (!modem.enableRTC(true))
-          Serial.println(F("Failed to enable"));
-        break;
-      }
-
-    case 'Y': {
-        // enable NTP time sync
-        if (!modem.enableNTPTimeSync(true, F("pool.ntp.org")))
-          Serial.println(F("Failed to enable"));
-        break;
-      }
-
-    case 't': {
-        // read the time
-        char buffer[23];
-
-        modem.getTime(buffer, 23);  // make sure replybuffer is at least 23 bytes!
-        Serial.print(F("Time = ")); Serial.println(buffer);
-        break;
-      }
-
+    
 
     case 'g': {
         // disable data
@@ -559,21 +345,7 @@ void SIM7000loop() {
             Serial.println(F("Failed to turn on"));
         break;
       }
-    case 'l': {
-        // check for GSMLOC (requires GPRS)
-        uint16_t returncode;
-
-        if (!modem.getGSMLoc(&returncode, replybuffer, 250))
-          Serial.println(F("Failed!"));
-        if (returncode == 0) {
-          Serial.println(replybuffer);
-        } else {
-          Serial.print(F("Fail code #")); Serial.println(returncode);
-        }
-
-        break;
-      }
-
+    
     // The code below was written by Adafruit and only works on some modules
     case 'w': {
         // read website URL
@@ -706,19 +478,7 @@ void SIM7000loop() {
         break;
         }
 
-        case 'S': {
-        Serial.println(F("Creating SERIAL TUBE"));
-        while (1) {
-          while (Serial.available()) {
-            delay(1);
-            modem.write(Serial.read());
-          }
-          if (modem.available()) {
-            Serial.write(modem.read());
-          }
-        }
-        break;
-      }
+      
 
     default: {
         Serial.println(F("Unknown command"));

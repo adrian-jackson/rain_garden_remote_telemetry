@@ -15,7 +15,7 @@ void setup() {
 void loop() {
   int raw_pos = analogRead(POS_PIN);
   int raw_neg = analogRead(NEG_PIN);
-  int voltage = raw_pos * 11 - raw_neg;
+  int voltage = raw_pos raw_neg;
   Serial.println(voltage);
 
   delay(1000); //log every 10 mins
