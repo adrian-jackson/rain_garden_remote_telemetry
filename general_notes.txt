@@ -1,2 +1,2 @@
 ->to upload code to arduino, SIM7000 MUST be off!
-->SIM7000 looks like it needs 5V
+->SIM7000 needs 5V if powering from VCC/GND pins. 3.7V lipo must be done through the connector.
