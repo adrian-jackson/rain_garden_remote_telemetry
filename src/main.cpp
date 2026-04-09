@@ -1,5 +1,5 @@
 /*
- * SIM7000 Timed HTTPS POST Example
+ * SIM7000 Timed HTTPS POST/GET Example
  * Adapted from Botletics SIM7000 demo sketch.
  *
  * Serial is OUTPUT ONLY - used for debug logging and event reporting.
@@ -8,7 +8,7 @@
  * Fill in:
  *   APN              - your SIM card's APN
  *   SERVER_HOST      - your server hostname (no https://)
- *   SERVER_PATH      - the path/endpoint on that server
+ *   SERVER_PATH      - the path/endpoint on that server (for POST)
  *   POST_INTERVAL_MS - how often to post (milliseconds)
  *
  * For HTTPS: set #define BOTLETICS_SSL 1 in Botletics_modem.h
@@ -21,10 +21,13 @@
 
 // ── User configuration ────────────────────────────────────────────────────────
 #define APN              "hologram"          // ← your SIM card APN
-#define SERVER_HOST      "https://webhook.site"   // ← no https://, no trailing slash
-#define SERVER_PATH      "/e9e74d04-7a40-401c-9fd4-52a4754c1e97"          // ← endpoint path
+#define SERVER_HOST      "example.com"       // ← no https://, no trailing slash
+#define SERVER_PATH      ""                  // ← endpoint path for POST
 #define POST_INTERVAL_MS 30000UL             // ← 30 seconds
-#define BOTLETICS_SSL 1
+#define BOTLETICS_SSL 0
+
+// Set to 1 to perform an HTTP GET to http://example.com/ instead of POST
+#define GET_MODE 1
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Pin definitions for SIM7000 / SIM7070 shield
@@ -50,14 +53,29 @@ uint32_t successCount = 0;   // successful posts
 bool connectGPRS();
 int  postJSON();           // returns HTTP status code, or -1 on connection failure
 void buildJSONBody(char *buf, uint16_t bufLen);
+int  performGET();        // returns HTTP status or -1 on failure
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Diagnostic helper: send AT command and print modem reply
+void runAT(const char* cmd, unsigned long timeout=3000) {
+  while (modemSS.available()) modemSS.read();
+  Serial.print(F(">>> "));
+  Serial.println(cmd);
+  modemSS.println(cmd);
+  unsigned long start = millis();
+  while (millis() - start < timeout) {
+    while (modemSS.available()) {
+      Serial.write(modemSS.read());
+    }
+  }
+  Serial.println();
+}
+
 void setup() {
-  // Serial is initialised for OUTPUT only - never read from it
   Serial.begin(9600);
   Serial.println(F(""));
   Serial.println(F("============================="));
-  Serial.println(F(" SIM7000 HTTPS POST logger"));
+  Serial.println(F(" SIM7000 HTTPS POST/GET logger"));
   Serial.println(F("============================="));
 
   pinMode(RST, OUTPUT);
@@ -65,7 +83,6 @@ void setup() {
 
   modem.powerOn(PWRKEY);
 
-  // Start modem at default baud then switch to 9600
   modemSS.begin(115200);
   Serial.println(F("[MODEM] Configuring baud rate..."));
   modemSS.println("AT+IPR=9600");
@@ -89,20 +106,16 @@ void setup() {
   Serial.print(F("[MODEM] APN: "));
   Serial.println(F(APN));
 
-  // Initial GPRS connection
   gprsReady = connectGPRS();
 
-  // Prime the timer so the first post fires immediately
   lastPostTime = millis() - POST_INTERVAL_MS;
 
-  Serial.print(F("[MAIN] Post interval: "));
-  Serial.print(POST_INTERVAL_MS / 1000);
-  Serial.println(F("s"));
+  Serial.print(F("[MAIN] Interval (ms): "));
+  Serial.println(POST_INTERVAL_MS);
   Serial.println(F("-----------------------------"));
 }
 
 void loop() {
-  // Never read from Serial - output only
   unsigned long now = millis();
 
   if (now - lastPostTime >= POST_INTERVAL_MS) {
@@ -110,40 +123,71 @@ void loop() {
     postCount++;
 
     Serial.println(F(""));
-    Serial.print(F("[POST] Attempt #"));
+    Serial.print(F("[TASK] Attempt #"));
     Serial.println(postCount);
 
-    // Re-establish GPRS if it dropped
     if (!gprsReady) {
       Serial.println(F("[GPRS] Reconnecting..."));
       gprsReady = connectGPRS();
     }
 
     if (gprsReady) {
-      int statusCode = postJSON();
+      // Add this before calling AT+SHCONN / before modem.HTTP_connect in your sketch.
+      // Assumes runAT(cmd, timeout) helper from your sketch is available
+      // and that PDP context 1 is the active context (from AT+CGPADDR).
+
+      // Ensure verbose errors
+      runAT("AT+CMEE=2", 2000);
+
+      // Bind SH service to PDP CID 1 (use the CID that returned a non-zero IP)
+      runAT("AT+SHCONF=\"CID\",1", 2000);
+
+      // Disable SSL for plain HTTP
+      runAT("AT+SHSSL=0", 2000);
+
+      // Set the target URL (include http:// or https:// as appropriate)
+      runAT("AT+SHCONF=\"URL\",\"http://example.com\"", 2000);
+
+      // Optional: set expected header/body buffer sizes
+      runAT("AT+SHCONF=\"HEADERLEN\",350", 2000);
+      runAT("AT+SHCONF=\"BODYLEN\",1024", 2000);
+
+      // Now attempt to connect
+      runAT("AT+SHCONN", 10000);
+
+      // Check state
+      runAT("AT+SHSTATE?", 2000);
+
+
+        
+
+      int statusCode = -1;
+      if (GET_MODE) {
+        statusCode = performGET();
+      } else {
+        statusCode = postJSON();
+      }
 
       if (statusCode == -1) {
-        Serial.println(F("[POST] FAILED - could not connect to server"));
+        Serial.println(F("[TASK] FAILED - could not connect or no response"));
       } else {
         successCount++;
-        Serial.print(F("[POST] HTTP status: "));
+        Serial.print(F("[TASK] HTTP status: "));
         Serial.println(statusCode);
-
-        // Log a warning for non-2xx responses
         if (statusCode < 200 || statusCode >= 300) {
-          Serial.println(F("[POST] WARNING: server returned non-2xx status"));
+          Serial.println(F("[TASK] WARNING: non-2xx status"));
         } else {
-          Serial.println(F("[POST] OK"));
+          Serial.println(F("[TASK] OK"));
         }
       }
 
-      Serial.print(F("[POST] Success rate: "));
+      Serial.print(F("[TASK] Success rate: "));
       Serial.print(successCount);
       Serial.print(F("/"));
       Serial.println(postCount);
 
     } else {
-      Serial.println(F("[POST] Skipped - no GPRS connection"));
+      Serial.println(F("[TASK] Skipped - no GPRS connection"));
     }
   }
 }
@@ -168,6 +212,36 @@ bool connectGPRS() {
   return true;
 }
 
+// ── HTTP GET ──────────────────────────────────────────────────────────────────
+// Returns HTTP status code or -1 on failure.
+int performGET() {
+  Serial.print(F("[GET] Host: " SERVER_HOST));
+  Serial.println(F(""));
+  Serial.println(F("[GET] Path: /"));
+
+  // Connect using HTTP_connect (library expects full URL)
+  if (!modem.HTTP_connect("http://" SERVER_HOST)) {
+    Serial.println(replybuffer);
+    return -1;
+  }
+
+  // Use HTTP_GET provided by library; it stores response in replybuffer
+  bool got = modem.HTTP_GET("/");
+
+  if (!got) {
+    Serial.println(F("[GET] HTTP_GET failed"));
+    return -1;
+  }
+
+  // replybuffer should start with status code (library behavior)
+  Serial.print(F("[GET] Raw reply: "));
+  Serial.println(replybuffer);
+
+  int statusCode = atoi(replybuffer);
+  if (statusCode == 0) statusCode = 200;
+  return statusCode;
+}
+
 // ── HTTP POST ─────────────────────────────────────────────────────────────────
 // Returns the HTTP status code (e.g. 200, 400, 500), or -1 on failure.
 
@@ -182,47 +256,35 @@ int postJSON() {
   Serial.print(F("[POST] Body: "));
   Serial.println(body);
 
-  if (!modem.HTTP_connect("https://" SERVER_HOST)) {
+  if (!modem.HTTP_connect("http://" SERVER_HOST)) {
+    Serial.println(replybuffer);
     return -1;
   }
 
   modem.HTTP_addHeader("Content-Type", "application/json", 16);
 
-  // HTTP_POST returns true/false; to get the status code we read
-  // the reply buffer that the library populates after the request.
   bool sent = modem.HTTP_POST(SERVER_PATH, body, strlen(body));
 
   if (!sent) {
     return -1;
   }
 
-  // The Botletics library stores the response in replybuffer after HTTP_POST.
-  // Parse the first token as the HTTP status code.
-  // If your library version exposes a getHTTPStatus() call, use that instead.
   int statusCode = atoi(replybuffer);
-  if (statusCode == 0) {
-    // atoi returned 0 meaning the buffer didn't start with a number;
-    // treat a successful send with unparseable response as 200.
-    statusCode = 200;
-  }
+  if (statusCode == 0) statusCode = 200;
 
   return statusCode;
 }
 
 // ── Build your JSON body here ─────────────────────────────────────────────────
-// Edit this function to match your endpoint's expected schema.
 
 void buildJSONBody(char *buf, uint16_t bufLen) {
-  // Example sensor reads - replace these with your own
-  float temperature = analogRead(A0) * 1.23; // ← your sensor here
+  float temperature = analogRead(A0) * 1.23;
   uint16_t battMv   = 0;
   if (!modem.getBattVoltage(&battMv)) battMv = 0;
 
   char tempStr[12];
   dtostrf(temperature, 1, 2, tempStr);
 
-  // Example output: {"device":"123456789012345","temp":"24.50","batt":3842}
-  // ← rename keys/add fields to match your server schema
   snprintf(buf, bufLen,
     "{\"device\":\"%s\",\"temp\":\"%s\",\"batt\":%u}",
     imei, tempStr, battMv
