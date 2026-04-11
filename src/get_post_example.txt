@@ -1,4 +1,3 @@
-#include "Arduino.h"
 /*
  * SIM7000 Timed HTTPS POST/GET Example
  * Adapted from Botletics SIM7000 demo sketch.
@@ -42,7 +41,7 @@ SoftwareSerial modemSS(TX, RX);
 
 Botletics_modem_LTE modem = Botletics_modem_LTE();
 
-char imei[16] = {0};
+char imei[16]       = {0};
 char replybuffer[255];
 
 unsigned long lastPostTime = 0;
@@ -139,21 +138,7 @@ void loop() {
 
       // Ensure verbose errors
       runAT("AT+CMEE=2", 2000);
-      runAT("AT+CGDCONT?");
-      runAT("AT+CGDCONT=1,\"IP\",\"hologram\" ");
-      runAT("AT+CGDCONT?");
-      runAT("AT+CGPADDR");
-      runAT("AT+CNACT=1,\"\"");
-      runAT("AT+CDNSCFG=\"8.8.8.8\",\"8.8.4.4\"");
-      runAT("AT+CGATT?");
-      runAT("AT+CREG?");
-      runAT("AT+CGREG?");
-      runAT("AT+SHCONF=\"TIMEOUT\",30");
-      runAT("AT+SHSTATE?");
-      runAT("AT+SHCONN");
-
-
-
+      runAT("AT+CGDCONT=1,\"IP\",\"\" ");
       /*
       runAT("AT+GMR");
       runAT("AT+SHCONF?");
@@ -184,7 +169,7 @@ void loop() {
         
 
       int statusCode = -1;
-      //sendCloudSocketPayload();
+      sendCloudSocketPayload();
       if (GET_MODE) {
         statusCode = performGET();
       } else {

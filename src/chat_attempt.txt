@@ -1,0 +1,134 @@
+// Minimal SIM7000 HTTP GET test for Botletics shield
+// Adjust APN, BAUD, and Serial1 pins/port to your board
+#include <Arduino.h>
+
+const unsigned long BAUD = 115200;      // PC serial
+const unsigned long MODEM_BAUD = 115200; // modem serial
+const char APN[] = "hologram";     // set to your carrier APN
+const char TEST_HOST[] = "example.com";
+const char TEST_PATH[] = "/";
+
+HardwareSerial &modem = Serial; // change if using other Serial
+
+String readModem(unsigned long timeout = 1000) {
+  unsigned long t = millis();
+  String s;
+  while (millis() - t < timeout) {
+    while (modem.available()) {
+      char c = modem.read();
+      s += c;
+    }
+  }
+  return s;
+}
+
+bool sendAT(String cmd, const char* expect = "OK", unsigned long timeout = 2000) {
+  while (modem.available()) modem.read(); // flush
+  modem.print(cmd);
+  modem.print("\r\n");
+  unsigned long deadline = millis() + timeout;
+  String resp;
+  while (millis() < deadline) {
+    resp += readModem(200);
+    if (resp.indexOf(expect) >= 0) {
+      Serial.println(cmd + " -> " + expect);
+      return true;
+    }
+    if (resp.indexOf("ERROR") >= 0) break;
+  }
+  Serial.println(cmd + " -> FAIL");
+  Serial.println("Resp: " + resp);
+  return false;
+}
+
+void setup() {
+  Serial.begin(BAUD);
+  delay(100);
+  // Note: some boards require begin with pins: Serial1.begin(MODEM_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+  modem.begin(MODEM_BAUD);
+  delay(300);
+
+  Serial.println("SIM7000 minimal GET test");
+
+  // Basic AT loop
+  if (!sendAT("AT")) while (1) { delay(1000); }        // require basic comms
+  sendAT("ATE0"); // echo off
+
+  // Check SIM and network
+  if (!sendAT("AT+CPIN?","+CPIN: READY")) {
+    Serial.println("SIM not ready or needs PIN");
+  }
+
+  sendAT("AT+CREG?","+CREG:");   // network registration (2G/3G)
+  sendAT("AT+CEREG?","+CEREG:"); // EPS network registration (LTE)
+
+  // Set PDP context / APN
+  // For SIM7000 family use +CGDCONT, and open connection with QIACT (or AT+CGACT depending)
+  sendAT(String("AT+CGDCONT=1,\"IP\",\"") + APN + "\"");
+
+  // Optional: set DNS to public (if suspected DNS issue). SIM7000 supports AT+QIDNSCFG
+  sendAT("AT+QIDNSCFG=\"8.8.8.8\",\"8.8.4.4\"","OK");
+
+  // Activate wireless data context (QIACT) — modem variants differ; try QIACT then CGACT if needed
+  if (!sendAT("AT+QIACT=1","OK",15000)) {
+    // fallback to CGACT
+    sendAT("AT+CGACT=1,1","OK",15000);
+  }
+
+  // Query IP
+  sendAT("AT+QIACT?","+QIACT:");
+  // or AT+CGPADDR?
+  sendAT("AT+CGPADDR=1","+CGPADDR:");
+
+  // Test DNS resolve using built-in DNS command (QIDNSGIP) if available
+  if (sendAT(String("AT+QIDNSGIP=1,\"") + TEST_HOST + "\"", "OK", 10000)) {
+    Serial.println("Requested DNS lookup; reading reply:");
+    delay(2000);
+    Serial.println(readModem(2000));
+  } else {
+    Serial.println("QIDNSGIP not available or failed");
+  }
+
+  // Perform simple HTTP GET using QHTTPGET / HTTP interface (SIM7000 uses QHTTPCFG/QHTTPGET or QHTTP commands)
+  // Try the QHTTP interface (on Quectel-based modules). Adjust if your module uses different HTTP commands.
+  sendAT("AT+QHTTPCFG=\"contextid\",1","OK"); // ensure context id 1
+  sendAT("AT+QHTTPCFG=\"requestheader\",0","OK");
+  sendAT(String("AT+QHTTPURL=") + String(strlen(TEST_PATH)+TEST_HOST+10) + ",30"); // not strict; fallback below
+
+  // Simpler approach: use HTTP GET via QHTTPGET with full URL:
+  String url = String("http://") + TEST_HOST + TEST_PATH;
+  Serial.println("HTTP GET URL: " + url);
+  if (sendAT(String("AT+QHTTPGET=\"") + url + "\"", "+QHTTPGET: 0", 20000)) {
+    Serial.println("HTTP GET command accepted; read response:");
+    delay(2000);
+    Serial.println(readModem(3000));
+  } else {
+    Serial.println("QHTTPGET failed; trying legacy HTTP commands (AT+HTTPINIT...)");
+
+    // Try generic AT+HTTPCLIENT or AT+HTTP commands used by some SIM7000 firmwares
+    sendAT("AT+HTTPTERM"); // kill any previous session
+    sendAT("AT+HTTPINIT");
+    sendAT(String("AT+HTTPPARA=\"CID\",1"));
+    sendAT(String("AT+HTTPPARA=\"URL\",\"") + url + "\"");
+    if (sendAT("AT+HTTPACTION=0", "+HTTPACTION:", 20000)) {
+      // read status and data length
+      delay(2000);
+      Serial.println(readModem(2000));
+      sendAT("AT+HTTPREAD", "OK", 10000);
+      Serial.println(readModem(3000));
+      sendAT("AT+HTTPTERM");
+    } else {
+      Serial.println("HTTPACTION failed");
+    }
+  }
+
+  Serial.println("Done test. Monitor Serial for raw modem replies.");
+}
+
+void loop() {
+  // Print any unsolicited modem output to Serial for debugging
+  while (modem.available()) {
+    Serial.write(modem.read());
+  }
+  delay(100);
+}
