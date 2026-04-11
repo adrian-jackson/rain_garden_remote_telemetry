@@ -28,7 +28,7 @@
 #define BOTLETICS_SSL 0
 
 // Set to 1 to perform an HTTP GET to http://example.com/ instead of POST
-#define GET_MODE 1
+#define GET_MODE 0
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Pin definitions for SIM7000 / SIM7070 shield
@@ -55,6 +55,8 @@ bool connectGPRS();
 int  postJSON();           // returns HTTP status code, or -1 on connection failure
 void buildJSONBody(char *buf, uint16_t bufLen);
 int  performGET();        // returns HTTP status or -1 on failure
+void CIPTCP();            //use TCP socket to send data
+bool waitForChar(Stream &serial, char target, unsigned long timeoutMs, char *buf = nullptr, size_t bufLen = 0);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Diagnostic helper: send AT command and print modem reply
@@ -133,62 +135,14 @@ void loop() {
     }
 
     if (gprsReady) {
-      // Add this before calling AT+SHCONN / before modem.HTTP_connect in your sketch.
-      // Assumes runAT(cmd, timeout) helper from your sketch is available
-      // and that PDP context 1 is the active context (from AT+CGPADDR).
-
-      // Ensure verbose errors
-      runAT("AT+CMEE=2", 2000);
-      runAT("AT+CGDCONT?");
-      runAT("AT+CGDCONT=1,\"IP\",\"hologram\" ");
-      runAT("AT+CGDCONT?");
-      runAT("AT+CGPADDR");
-      runAT("AT+CNACT=1,\"\"");
-      runAT("AT+CDNSCFG=\"8.8.8.8\",\"8.8.4.4\"");
-      runAT("AT+CGATT?");
-      runAT("AT+CREG?");
-      runAT("AT+CGREG?");
-      runAT("AT+SHCONF=\"TIMEOUT\",30");
-      runAT("AT+SHSTATE?");
-      runAT("AT+SHCONN");
-
-
-
-      /*
-      runAT("AT+GMR");
-      runAT("AT+SHCONF?");
-      runAT("AT$QCRMCALL=1,0,\"example.com\",80");
-      runAT("AT+CGDCONT?");
-      */
-      /*
-      // Bind SH service to PDP CID 1 (use the CID that returned a non-zero IP)
-      runAT("AT+SHCONF=\"CID\",1", 2000);
-
-      // Disable SSL for plain HTTP
-      runAT("AT+SHSSL=0", 2000);
-
-      // Set the target URL (include http:// or https:// as appropriate)
-      runAT("AT+SHCONF=\"URL\",\"http://example.com\"", 2000);
-
-      // Optional: set expected header/body buffer sizes
-      runAT("AT+SHCONF=\"HEADERLEN\",350", 2000);
-      runAT("AT+SHCONF=\"BODYLEN\",1024", 2000);
-
-      // Now attempt to connect
-      runAT("AT+SHCONN", 10000);
-
-      // Check state
-      runAT("AT+SHSTATE?", 2000);
-      */
-
-        
-
       int statusCode = -1;
       //sendCloudSocketPayload();
+
+
       if (GET_MODE) {
         statusCode = performGET();
       } else {
-        statusCode = postJSON();
+        CIPTCP();
       }
 
       if (statusCode == -1) {
@@ -235,49 +189,30 @@ bool connectGPRS() {
   return true;
 }
 
-// ─────────────────────────────────Send a single JSON line to Hologram CloudSocket over TCP─────────────────────────────────
-int sendCloudSocketPayload(const char *jsonLine) {
-  // Ensure verbose errors
-  runAT("AT+CMEE=2", 2000);
 
-  // Disable SSL (TCP, not TLS)
-  runAT("AT+SHSSL=0", 2000);
-
-  // Bind to PDP CID 1 (use CID that has IP from AT+CGPADDR)
-  // If CID setting returns operation not allowed, omit this line.
-  runAT("AT+SHCONF=\"CID\",1", 2000);
-
-  // Set URL as host:port (host resolves on network)
-  runAT("AT+SHCONF=\"URL\",\"cloudsocket.hologram.io:9999\"", 2000);
-
-  // Set body/header lengths (BODYLEN is the max payload we will send)
-  runAT("AT+SHCONF=\"BODYLEN\",1024", 2000);
-  runAT("AT+SHCONF=\"HEADERLEN\",0", 2000);
-
-  // Try to connect
-  runAT("AT+SHCONN", 10000);
-
-  // Check state
-  runAT("AT+SHSTATE?", 2000);
-  // If state is 1 (connected) proceed, otherwise return error.
-  // The library doesn't return parsed state here, so we'll attempt to send and check for errors.
-
-  // Send payload using SHWRITE (some firmwares use AT+SHSEND or AT+SHWR)
-  // Try AT+SHWRITE first (adjust if your firmware uses different command)
-  char cmd[64];
-  snprintf(cmd, sizeof(cmd), "AT+SHWRITE=%u", (unsigned)strlen(jsonLine));
-  runAT(cmd, 2000);               // This should return a '>' prompt; if so, modemSS.println(jsonLine)
-  // Write raw payload (raw write after >)
-  modemSS.println(jsonLine);
-  delay(200); // small pause to allow transmit
-
-  // Close socket
-  runAT("AT+SHDISC", 5000);
-  runAT("AT+SHSTATE?", 2000);
-
-  return 0;
+//── TCP SOCKET  ──────────────────────────────────────────────────────────────────
+void CIPTCP() {
+  runAT("AT+CIPSHUT");
+  runAT("AT+CIPMUX=0");
+  runAT("AT+CSTT=\"\""); //(or you already have CGDCONT)
+  runAT("AT+CIICR");// (bring up wireless connection)
+  runAT("AT+CIFSR");// (get local IP)
+  runAT("AT+CIPSTART=\"TCP\",\"example.com\",\"80\"");
+  runAT("AT+CIPSEND");
+  delay(1000);
+  //if (waitForChar(Serial, '>', 5000)) {         
+    Serial.print("GET / HTTP/1.1\r\n");
+    Serial.print("Host: example.com\r\n");
+    Serial.print("Connection: close\r\n");
+    Serial.print("User-Agent: SIM7000\r\n");
+    Serial.print("Accept: */*\r\n");
+    Serial.print("\r\n");
+    Serial.write(0x1A);                  // Ctrl+Z terminator
+  //}
+  //send HTTP request, then CTRL+Z (0x1A)
+  delay(10000);
+  runAT("AT+CIPCLOSE");
 }
-
 
 
 // ── HTTP GET ──────────────────────────────────────────────────────────────────
@@ -357,4 +292,24 @@ void buildJSONBody(char *buf, uint16_t bufLen) {
     "{\"device\":\"%s\",\"temp\":\"%s\",\"batt\":%u}",
     imei, tempStr, battMv
   );
+}
+
+
+bool waitForChar(Stream &serial, char target, unsigned long timeoutMs, char *buf = nullptr, size_t bufLen = 0) {
+  unsigned long start = millis();
+  size_t idx = 0;
+  if (buf && bufLen > 0) buf[0] = '\0';
+  while (millis() - start < timeoutMs) {
+    while (serial.available()) {
+      int c = serial.read();
+      if (c < 0) continue;
+      if (buf && idx + 1 < bufLen) {
+        buf[idx++] = (char)c;
+        buf[idx] = '\0';
+      }
+      if ((char)c == target) return true;
+    }
+    delay(1);
+  }
+  return false;
 }
