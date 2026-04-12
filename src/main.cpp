@@ -56,38 +56,38 @@ int  postJSON();           // returns HTTP status code, or -1 on connection fail
 void buildJSONBody(char *buf, uint16_t bufLen);
 int  performGET();        // returns HTTP status or -1 on failure
 void CIPTCP();            //use TCP socket to send data
-bool waitForChar(Stream &serial, char target, unsigned long timeoutMs, char *buf = nullptr, size_t bufLen = 0);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Diagnostic helper: send AT command and print modem reply
-bool runAT(const char* cmd, unsigned long timeout=3000, char targetChar='1') {
+bool runAT(const char* cmd, unsigned long timeout=3000, char targetChar='0') {
+  bool charFound = false;
   while (modemSS.available()) modemSS.read();
   Serial.print(F(">>> "));
   Serial.println(cmd);
   modemSS.println(cmd);
   unsigned long start = millis();
-  /*
-  if(targetChar!=1){
+   //THIS BLOCK (USED TO) STOP MODEM RESPONSES FROM LOGGING IN SERIAL <_BUG (FIXED?)
+  if(targetChar!='0'){
     while (millis() - start < timeout) {
       while (modemSS.available()) {
         char c = modemSS.read();
-        if(c==targetChar){
-          Serial.println(c);
-          Serial.println("[INFO] Target char recv");
+        Serial.print(c);
+        if(c==targetChar){     
+          Serial.println("\r\n[INFO] Target char recv");
+          charFound = true;
         }
-        Serial.println(c);
-        return true;
+        
       }
     }
-  }else{*/
+  }else{ //END PROBLEM BLOCK
     while (millis() - start < timeout) {
       while (modemSS.available()) {
         Serial.write(modemSS.read());
       }
     }
-    Serial.println();
-    return false;
-  //}
+    Serial.println(); 
+  }
+  return charFound;
 }
 
 void setup() {
@@ -206,89 +206,79 @@ bool connectGPRS() {
 }
 
 
+//
+int readHttpStatusFromModem(unsigned long timeoutMs = 15000) {
+  const size_t BUF_SZ = 256; // reduce if on AVR Uno; increase if enough RAM
+  static char buf[BUF_SZ];
+  static size_t head = 0; // next write index
+  static size_t len = 0;  // current stored length (<= BUF_SZ)
+  bool statusFound = false;
+  auto push = [&](char c) {
+    if (len < BUF_SZ) {
+      size_t writeIdx = (head + len) % BUF_SZ;
+      buf[writeIdx] = c;
+      len++;
+    } else {
+      // buffer full: overwrite oldest by moving head forward and writing at tail
+      buf[head] = c;
+      head = (head + 1) % BUF_SZ;
+    }
+  };
+
+  auto getAt = [&](size_t i) -> char {
+    // i is 0..len-1
+    size_t idx = (head + i) % BUF_SZ;
+    return buf[idx];
+  };
+
+  unsigned long start = millis();
+  while (millis() - start < timeoutMs) {
+    while (modemSS.available()) {
+      char c = (char)modemSS.read();
+      Serial.print(c);
+      push(c);
+      if(buf[head-3] == '2' && buf[head-2] == '0' && buf[head-1] == '0'){statusFound = true;}
+    }
+      delay(10);
+  }
+  return -1; // timeout / not found
+}
+
 //── TCP SOCKET  ──────────────────────────────────────────────────────────────────
 void CIPTCP() {
+  bool CIPcharFound;
+  
   runAT("AT+CIPSHUT");
   runAT("AT+CIPMUX=0");
   runAT("AT+CSTT=\"\""); //(or you already have CGDCONT)
   runAT("AT+CIICR");// (bring up wireless connection)
   runAT("AT+CIFSR");// (get local IP)
   runAT("AT+CIPSTART=\"TCP\",\"example.com\",\"80\"");
-  runAT("AT+CIPSEND");
-  delay(1000);
-  //if (waitForChar(Serial, '>', 5000)) {         
-    Serial.print("GET / HTTP/1.1\r\n");
-    Serial.print("Host: example.com\r\n");
-    Serial.print("Connection: close\r\n");
-    Serial.print("User-Agent: SIM7000\r\n");
-    Serial.print("Accept: */*\r\n");
-    Serial.print("\r\n");
-    Serial.write(0x1A);                  // Ctrl+Z terminator
-  //}
-    unsigned long start = millis();
-    unsigned long timeout = 5000; // 15 seconds
+  CIPcharFound = runAT("AT+CIPSEND", 5000, '>');
+  delay(3000);
+  if (CIPcharFound) { 
+    Serial.println("[CIP TCP] Sending HTTP GET:");
+    Serial.println("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\nUser-Agent: SIM7000\r\nAccept: */*\r\n <CTRL+Z>");
+    modemSS.print("GET / HTTP/1.1\r\n") ;       
+    modemSS.print("Host: example.com\r\n");
+    modemSS.print("Connection: close\r\n");
+    modemSS.print("User-Agent: SIM7000\r\n");
+    modemSS.print("Accept: */*\r\n");
+    modemSS.print("\r\n");
+    modemSS.write(0x1A);    // Ctrl+Z terminator
+    Serial.println("[CIP TCP] HTTP GET sent");              
+  }
 
-    while (millis() - start < timeout) {
-      if (Serial.available()) {
-        char c = Serial.read();
-        // forward to USB monitor or another port:
-        //Serial.write(c);
-        // optionally accumulate: buffer += c;
-      }
-      // small yield to avoid locking the MCU
-      delay(10);
-    }
-  //delay(10000);
+  int httpStatus = readHttpStatusFromModem(15000); // 15s timeout
+  if (httpStatus >= 0) {
+    Serial.print(F("[CIP TCP] HTTP status: "));
+    Serial.println(httpStatus);
+  } else {
+    Serial.println(F("[CIP TCP] No HTTP status received (timeout)"));
+    // Optionally dump raw modem bytes remaining:
+    while (modemSS.available()) Serial.write(modemSS.read());
+  }
+
+  delay(3000);
   runAT("AT+CIPCLOSE");
-}
-
-
-// ── HTTP GET ──────────────────────────────────────────────────────────────────
-// Returns HTTP status code or -1 on failure.
-int performGET() {
-  Serial.print(F("[GET] Host: " SERVER_HOST));
-  Serial.println(F(""));
-  Serial.println(F("[GET] Path: /"));
-
-  // Connect using HTTP_connect (library expects full URL)
-  if (!modem.HTTP_connect("http://" SERVER_HOST)) {
-    Serial.println(replybuffer);
-    return -1;
-  }
-
-  // Use HTTP_GET provided by library; it stores response in replybuffer
-  bool got = modem.HTTP_GET("/");
-
-  if (!got) {
-    Serial.println(F("[GET] HTTP_GET failed"));
-    return -1;
-  }
-
-  // replybuffer should start with status code (library behavior)
-  Serial.print(F("[GET] Raw reply: "));
-  Serial.println(replybuffer);
-
-  int statusCode = atoi(replybuffer);
-  if (statusCode == 0) statusCode = 200;
-  return statusCode;
-}
-
-
-bool waitForChar(Stream &serial, char target, unsigned long timeoutMs, char *buf = nullptr, size_t bufLen = 0) {
-  unsigned long start = millis();
-  size_t idx = 0;
-  if (buf && bufLen > 0) buf[0] = '\0';
-  while (millis() - start < timeoutMs) {
-    while (serial.available()) {
-      int c = serial.read();
-      if (c < 0) continue;
-      if (buf && idx + 1 < bufLen) {
-        buf[idx++] = (char)c;
-        buf[idx] = '\0';
-      }
-      if ((char)c == target) return true;
-    }
-    delay(1);
-  }
-  return false;
 }
