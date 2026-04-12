@@ -54,8 +54,7 @@ uint32_t successCount = 0;   // successful posts
 bool connectGPRS();
 int  postJSON();           // returns HTTP status code, or -1 on connection failure
 void buildJSONBody(char *buf, uint16_t bufLen);
-int  performGET();        // returns HTTP status or -1 on failure
-void CIPTCP();            //use TCP socket to send data
+bool CIPTCP();            //use TCP socket to send data
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Diagnostic helper: send AT command and print modem reply
@@ -152,19 +151,17 @@ void loop() {
 
     if (gprsReady) {
       int statusCode = -1;
-      //sendCloudSocketPayload();
 
+      //send HTTP over TCP/IP
+      statusCode = CIPTCP();
 
-      if (GET_MODE) {
-        statusCode = performGET();
-      } else {
-        CIPTCP();
-      }
 
       if (statusCode == -1) {
         Serial.println(F("[TASK] FAILED - could not connect or no response"));
       } else {
         successCount++;
+        Serial.println(F("[TASK] SUCCESS - 200 OK received"));
+        /* //to be implemented
         Serial.print(F("[TASK] HTTP status: "));
         Serial.println(statusCode);
         if (statusCode < 200 || statusCode >= 300) {
@@ -172,6 +169,7 @@ void loop() {
         } else {
           Serial.println(F("[TASK] OK"));
         }
+          */
       }
 
       Serial.print(F("[TASK] Success rate: "));
@@ -212,7 +210,9 @@ int readHttpStatusFromModem(unsigned long timeoutMs = 15000) {
   static char buf[BUF_SZ];
   static size_t head = 0; // next write index
   static size_t len = 0;  // current stored length (<= BUF_SZ)
-  bool statusFound = false;
+  int codeSM = 0;
+  int statusFound = -1;
+  /* buffer currently unused
   auto push = [&](char c) {
     if (len < BUF_SZ) {
       size_t writeIdx = (head + len) % BUF_SZ;
@@ -224,30 +224,44 @@ int readHttpStatusFromModem(unsigned long timeoutMs = 15000) {
       head = (head + 1) % BUF_SZ;
     }
   };
-
+  */
+  /* //unused right now
   auto getAt = [&](size_t i) -> char {
     // i is 0..len-1
     size_t idx = (head + i) % BUF_SZ;
     return buf[idx];
   };
-
+  */
   unsigned long start = millis();
   while (millis() - start < timeoutMs) {
     while (modemSS.available()) {
       char c = (char)modemSS.read();
       Serial.print(c);
-      push(c);
-      if(buf[head-3] == '2' && buf[head-2] == '0' && buf[head-1] == '0'){statusFound = true;}
+      //shitty state machine below
+      if (c == '2' && codeSM == 0){
+        Serial.println('state 1');
+        codeSM += 1;
+      }else if (c == '0' && codeSM == 1){
+        Serial.println('state 2');
+        codeSM += 1;
+      }else if (c == '0' && codeSM == 2){
+        Serial.println('state 3');
+        statusFound = 1;
+        codeSM = 0;
+      }else{
+        codeSM = 0;
+      }
+      //push(c); //buffer currently unused
     }
-      delay(10);
+      delay(1);
   }
-  return -1; // timeout / not found
+  return statusFound; // timeout / not found
 }
 
 //── TCP SOCKET  ──────────────────────────────────────────────────────────────────
-void CIPTCP() {
+bool CIPTCP() {
   bool CIPcharFound;
-  
+    
   runAT("AT+CIPSHUT");
   runAT("AT+CIPMUX=0");
   runAT("AT+CSTT=\"\""); //(or you already have CGDCONT)
@@ -269,16 +283,18 @@ void CIPTCP() {
     Serial.println("[CIP TCP] HTTP GET sent");              
   }
 
+  //NEED BETTER LOGIC BELOW
   int httpStatus = readHttpStatusFromModem(15000); // 15s timeout
-  if (httpStatus >= 0) {
-    Serial.print(F("[CIP TCP] HTTP status: "));
-    Serial.println(httpStatus);
+  if (httpStatus > 0) {
+    Serial.print(F("[CIP TCP] HTTP status OK "));
+    //Serial.println(httpStatus);
   } else {
-    Serial.println(F("[CIP TCP] No HTTP status received (timeout)"));
-    // Optionally dump raw modem bytes remaining:
+    Serial.println(F("[CIP TCP] HTTP status not OK"));
+    //Dump raw modem bytes remaining:
     while (modemSS.available()) Serial.write(modemSS.read());
   }
 
   delay(3000);
   runAT("AT+CIPCLOSE");
+  return httpStatus; //temp- this will eventually be an actual code not just a bool if 200 was recv.
 }
