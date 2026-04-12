@@ -60,18 +60,34 @@ bool waitForChar(Stream &serial, char target, unsigned long timeoutMs, char *buf
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Diagnostic helper: send AT command and print modem reply
-void runAT(const char* cmd, unsigned long timeout=3000) {
+bool runAT(const char* cmd, unsigned long timeout=3000, char targetChar='1') {
   while (modemSS.available()) modemSS.read();
   Serial.print(F(">>> "));
   Serial.println(cmd);
   modemSS.println(cmd);
   unsigned long start = millis();
-  while (millis() - start < timeout) {
-    while (modemSS.available()) {
-      Serial.write(modemSS.read());
+  /*
+  if(targetChar!=1){
+    while (millis() - start < timeout) {
+      while (modemSS.available()) {
+        char c = modemSS.read();
+        if(c==targetChar){
+          Serial.println(c);
+          Serial.println("[INFO] Target char recv");
+        }
+        Serial.println(c);
+        return true;
+      }
     }
-  }
-  Serial.println();
+  }else{*/
+    while (millis() - start < timeout) {
+      while (modemSS.available()) {
+        Serial.write(modemSS.read());
+      }
+    }
+    Serial.println();
+    return false;
+  //}
 }
 
 void setup() {
@@ -209,8 +225,20 @@ void CIPTCP() {
     Serial.print("\r\n");
     Serial.write(0x1A);                  // Ctrl+Z terminator
   //}
-  //send HTTP request, then CTRL+Z (0x1A)
-  delay(10000);
+    unsigned long start = millis();
+    unsigned long timeout = 5000; // 15 seconds
+
+    while (millis() - start < timeout) {
+      if (Serial.available()) {
+        char c = Serial.read();
+        // forward to USB monitor or another port:
+        //Serial.write(c);
+        // optionally accumulate: buffer += c;
+      }
+      // small yield to avoid locking the MCU
+      delay(10);
+    }
+  //delay(10000);
   runAT("AT+CIPCLOSE");
 }
 
@@ -243,55 +271,6 @@ int performGET() {
   int statusCode = atoi(replybuffer);
   if (statusCode == 0) statusCode = 200;
   return statusCode;
-}
-
-// ── HTTP POST ─────────────────────────────────────────────────────────────────
-// Returns the HTTP status code (e.g. 200, 400, 500), or -1 on failure.
-
-int postJSON() {
-  char body[200];
-  buildJSONBody(body, sizeof(body));
-
-  Serial.print(F("[POST] Host: " SERVER_HOST));
-  Serial.println(F(""));
-  Serial.print(F("[POST] Path: " SERVER_PATH));
-  Serial.println(F(""));
-  Serial.print(F("[POST] Body: "));
-  Serial.println(body);
-
-  if (!modem.HTTP_connect("http://" SERVER_HOST)) {
-    Serial.println(replybuffer);
-    return -1;
-  }
-
-  modem.HTTP_addHeader("Content-Type", "application/json", 16);
-
-  bool sent = modem.HTTP_POST(SERVER_PATH, body, strlen(body));
-
-  if (!sent) {
-    return -1;
-  }
-
-  int statusCode = atoi(replybuffer);
-  if (statusCode == 0) statusCode = 200;
-
-  return statusCode;
-}
-
-// ── Build your JSON body here ─────────────────────────────────────────────────
-
-void buildJSONBody(char *buf, uint16_t bufLen) {
-  float temperature = analogRead(A0) * 1.23;
-  uint16_t battMv   = 0;
-  if (!modem.getBattVoltage(&battMv)) battMv = 0;
-
-  char tempStr[12];
-  dtostrf(temperature, 1, 2, tempStr);
-
-  snprintf(buf, bufLen,
-    "{\"device\":\"%s\",\"temp\":\"%s\",\"batt\":%u}",
-    imei, tempStr, battMv
-  );
 }
 
 
