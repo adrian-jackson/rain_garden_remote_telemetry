@@ -1,5 +1,4 @@
 #include "Arduino.h"
-#include "api_key.h"
 /*
  * SIM7000 Timed HTTPS POST/GET Example
  * Adapted from Botletics SIM7000 demo sketch.
@@ -23,8 +22,8 @@
 
 // ── User configuration ────────────────────────────────────────────────────────
 #define APN              "hologram"          // ← your SIM card APN
-#define SERVER_HOST      "rcewrp-backend-23923596738.us-central1.run.app"       // ← no https://, no trailing slash
-#define SERVER_PATH      "/upload"                  // ← endpoint path for POST
+#define SERVER_HOST      "example.com"       // ← no https://, no trailing slash
+#define SERVER_PATH      ""                  // ← endpoint path for POST
 #define POST_INTERVAL_MS 30000UL             // ← 30 seconds
 #define BOTLETICS_SSL 0
 
@@ -56,18 +55,6 @@ bool connectGPRS();
 int  postJSON();           // returns HTTP status code, or -1 on connection failure
 void buildJSONBody(char *buf, uint16_t bufLen);
 bool CIPTCP();            //use TCP socket to send data
-bool executeHTTP(String req_mode);       //send HTTP request
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Demo Values ──────────────────────────────────────────────────────
-const char *API_KEY = ADMIN_PANEL_API_KEY;
-const char *uniqueSiteId = "test";
-float temp_current = 1.0;
-float inflow_current = 1.0;
-float outflow_current = 1.0;
-float downflow_current = 1.0;
-float humidity_current = 1.0;
-float precipitation_current = 1.0;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Diagnostic helper: send AT command and print modem reply
@@ -220,9 +207,9 @@ bool connectGPRS() {
 //
 int readHttpStatusFromModem(unsigned long timeoutMs = 15000) {
   const size_t BUF_SZ = 256; // reduce if on AVR Uno; increase if enough RAM
-  //static char buf[BUF_SZ];
-  //static size_t head = 0; // next write index
-  //static size_t len = 0;  // current stored length (<= BUF_SZ)
+  static char buf[BUF_SZ];
+  static size_t head = 0; // next write index
+  static size_t len = 0;  // current stored length (<= BUF_SZ)
   int codeSM = 0;
   int statusFound = -1;
   /* buffer currently unused
@@ -252,15 +239,15 @@ int readHttpStatusFromModem(unsigned long timeoutMs = 15000) {
       Serial.print(c);
       //shitty state machine below
       if (c == '2' && codeSM == 0){
-        //Serial.println("state 1");
+        Serial.println('state 1');
         codeSM += 1;
       }else if (c == '0' && codeSM == 1){
-        //Serial.println("state 2");
+        Serial.println('state 2');
         codeSM += 1;
       }else if (c == '0' && codeSM == 2){
-        //Serial.println("state 3");
+        Serial.println('state 3');
         statusFound = 1;
-        codeSM = 0; //dont need but eh
+        codeSM = 0;
       }else{
         codeSM = 0;
       }
@@ -269,63 +256,6 @@ int readHttpStatusFromModem(unsigned long timeoutMs = 15000) {
       delay(1);
   }
   return statusFound; // timeout / not found
-}
-
-bool executeHTTP(String req_mode){
-  if(req_mode == "GET"){
-    Serial.println("[CIP TCP] Sending HTTP GET:");
-    Serial.print("Destination: ");
-    Serial.println(SERVER_HOST);
-    modemSS.print("GET / HTTP/1.1\r\n") ;       
-    modemSS.print("Host:");
-    modemSS.print(SERVER_HOST);
-    modemSS.print("\r\n");
-    modemSS.print("Connection: close\r\n");
-    modemSS.print("User-Agent: SIM7000\r\n");
-    modemSS.print("Accept: */*\r\n");
-    modemSS.print("\r\n");
-    modemSS.write(0x1A);    // Ctrl+Z terminator
-    Serial.println("[CIP TCP] HTTP GET sent");    
-
-  }else if(req_mode == "POST"){
-    Serial.println("[CIP TCP] Sending HTTP POST:");
-    //Serial.println("\r\n <CTRL+Z>");
-    char body[256];
-    int bodyLen = snprintf(body, sizeof(body),
-      "{\"siteId\":\"%s\",\"temp\":%.2f,\"inflow\":%.2f,\"outflow\":%.2f,\"downflow\":%.2f,\"humidity\":%.2f,\"precipitation\":%.2f}",
-      uniqueSiteId, temp_current, inflow_current, outflow_current, downflow_current, humidity_current, precipitation_current);
-
-    if (bodyLen < 0 || bodyLen >= (int)sizeof(body)) {
-      Serial.println("Body too large");
-      return;
-    }
-
-    // Build request headers
-    char header[512];
-    int payloadLen = snprintf(header, sizeof(header),
-      "POST / HTTP/1.1\r\n"
-      "Host: %s\r\n"
-      "Authorization: Bearer %s\r\n"
-      "Content-Type: application/json\r\n"
-      "Content-Length: %d\r\n"
-      "Connection: close\r\n"
-      "User-Agent: SIM7000\r\n"
-      "Accept: */*\r\n"
-      "\r\n"
-      "%s",
-      SERVER_HOST, API_KEY, bodyLen, body);
-
-    if (payloadLen < 0 || payloadLen >= (int)sizeof(header)) {
-      Serial.println("Header too large");
-      return;
-    }
-    modemSS.write((const uint8_t*)header, payloadLen);
-    modemSS.print("\r\n");
-    modemSS.write(0x1A);    // Ctrl+Z terminator
-    Serial.println("[CIP TCP] HTTP POST sent"); 
-  }else{
-    Serial.println("[ERROR] Unaccepted HTTP request type");
-  }  
 }
 
 //── TCP SOCKET  ──────────────────────────────────────────────────────────────────
@@ -337,14 +267,20 @@ bool CIPTCP() {
   runAT("AT+CSTT=\"\""); //(or you already have CGDCONT)
   runAT("AT+CIICR");// (bring up wireless connection)
   runAT("AT+CIFSR");// (get local IP)
-  char hostname_buff[128];
-  snprintf(hostname_buff, sizeof hostname_buff, "AT+CIPSTART=\"TCP\",\"%s\",\"80\"", SERVER_HOST); //construct buffer to embed hostname into command
-  runAT(hostname_buff);
+  runAT("AT+CIPSTART=\"TCP\",\"example.com\",\"80\"");
   CIPcharFound = runAT("AT+CIPSEND", 5000, '>');
-  //may need to send header size with CIPSEND via modemSS.println(payloadLen); would need embedding in the wait for '>'
   delay(3000);
-  if (CIPcharFound) {
-    executeHTTP("POST");         
+  if (CIPcharFound) { 
+    Serial.println("[CIP TCP] Sending HTTP GET:");
+    Serial.println("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\nUser-Agent: SIM7000\r\nAccept: */*\r\n <CTRL+Z>");
+    modemSS.print("GET / HTTP/1.1\r\n") ;       
+    modemSS.print("Host: example.com\r\n");
+    modemSS.print("Connection: close\r\n");
+    modemSS.print("User-Agent: SIM7000\r\n");
+    modemSS.print("Accept: */*\r\n");
+    modemSS.print("\r\n");
+    modemSS.write(0x1A);    // Ctrl+Z terminator
+    Serial.println("[CIP TCP] HTTP GET sent");              
   }
 
   //NEED BETTER LOGIC BELOW
