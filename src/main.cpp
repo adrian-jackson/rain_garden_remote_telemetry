@@ -285,23 +285,36 @@ bool executeHTTP(String req_mode){
     modemSS.print("Accept: */*\r\n");
     modemSS.print("\r\n");
     modemSS.write(0x1A);    // Ctrl+Z terminator
-    Serial.println("[CIP TCP] HTTP GET sent");    
+    Serial.println("[CIP TCP] HTTP GET sent");   
+    return true; 
 
-  }else if(req_mode == "POST"){
+   }else if(req_mode == "POST"){
     Serial.println("[CIP TCP] Sending HTTP POST:");
     //Serial.println("\r\n <CTRL+Z>");
-    char body[256];
-    int bodyLen = snprintf(body, sizeof(body),
-      "{\"siteId\":\"%s\",\"temp\":%.2f,\"inflow\":%.2f,\"outflow\":%.2f,\"downflow\":%.2f,\"humidity\":%.2f,\"precipitation\":%.2f}",
-      uniqueSiteId, temp_current, inflow_current, outflow_current, downflow_current, humidity_current, precipitation_current);
+    //char body[256];
+    char temp_s[12], inflow_s[12], outflow_s[12], downflow_s[12], humidity_s[12], precipitation_s[12];
 
-    if (bodyLen < 0 || bodyLen >= (int)sizeof(body)) {
+    dtostrf(temp_current, 0, 2, temp_s);
+    dtostrf(inflow_current, 0, 2, inflow_s);
+    dtostrf(outflow_current, 0, 2, outflow_s);
+    dtostrf(downflow_current, 0, 2, downflow_s);
+    dtostrf(humidity_current, 0, 2, humidity_s);
+    dtostrf(precipitation_current, 0, 2, precipitation_s);
+
+    String body = "{\"siteId\": 0}";
+    int bodyLen =  body.length();
+
+    //int bodyLen = snprintf(body, sizeof(body),
+    //  "{\"siteId\":\"%s\",\"temp\":%s,\"inflow\":%s,\"outflow\":%s,\"downflow\":%s,\"humidity\":%s,\"precipitation\":%s}",
+    //  uniqueSiteId, temp_s, inflow_s, outflow_s, downflow_s, humidity_s, precipitation_s);
+    
+      if (bodyLen < 0 || bodyLen >= (int)sizeof(body)) {
       Serial.println("Body too large");
-      return;
+      return false;
     }
 
-    // Build request headers
-    char header[512];
+    // build header+body into single buffer
+    char header[1024];
     int payloadLen = snprintf(header, sizeof(header),
       "POST / HTTP/1.1\r\n"
       "Host: %s\r\n"
@@ -315,16 +328,20 @@ bool executeHTTP(String req_mode){
       "%s",
       SERVER_HOST, API_KEY, bodyLen, body);
 
-    if (payloadLen < 0 || payloadLen >= (int)sizeof(header)) {
+      if (payloadLen < 0 || payloadLen >= (int)sizeof(header)) {
       Serial.println("Header too large");
-      return;
+      return false;
     }
     modemSS.write((const uint8_t*)header, payloadLen);
+    Serial.println(header);
     modemSS.print("\r\n");
     modemSS.write(0x1A);    // Ctrl+Z terminator
-    Serial.println("[CIP TCP] HTTP POST sent"); 
+    Serial.println("[CIP TCP] HTTP POST sent");
+    return true;
+    
   }else{
     Serial.println("[ERROR] Unaccepted HTTP request type");
+    return false;
   }  
 }
 
@@ -349,16 +366,19 @@ bool CIPTCP() {
 
   //NEED BETTER LOGIC BELOW
   int httpStatus = readHttpStatusFromModem(15000); // 15s timeout
+  int returnVal;
   if (httpStatus > 0) {
     Serial.print(F("[CIP TCP] HTTP status OK "));
     //Serial.println(httpStatus);
+    returnVal = httpStatus;
   } else {
     Serial.println(F("[CIP TCP] HTTP status not OK"));
     //Dump raw modem bytes remaining:
     while (modemSS.available()) Serial.write(modemSS.read());
+    returnVal = -1;
   }
 
   delay(3000);
   runAT("AT+CIPCLOSE");
-  return httpStatus; //temp- this will eventually be an actual code not just a bool if 200 was recv.
+  return returnVal; //temp- this will eventually be an actual code not just a bool if 200 was recv.
 }
