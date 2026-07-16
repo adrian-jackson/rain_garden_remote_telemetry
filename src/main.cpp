@@ -12,7 +12,7 @@ SoftwareSerial shieldSerial(10, 11);
 // ── User configuration ────────────────────────────────────────────────────────
 #define APN              "hologram"          // ← your SIM card APN
 #define SERVER_HOST      "rcewrp-backend-23923596738.us-central1.run.app"       // ← no https://, no trailing slash
-#define SERVER_PATH      "/upload"                  // ← endpoint path for POST
+#define SERVER_PATH      "/admin/sample"                  // ← endpoint path for POST
 #define POST_INTERVAL_MS 30000UL             // ← 30 seconds
 #define BOTLETICS_SSL 0
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,10 +126,16 @@ void sendHTTPPost(const char* url, const char* body) {
     sendCommand("AT+HTTPINIT", 1000);
     sendCommand("AT+HTTPPARA=\"CID\",1", 1000);
 
+
+
     snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"URL\",\"%s\"", url);
     sendCommand(buf, 1000);
 
     sendCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
+
+    // Add custom Authorization header        
+    snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"USERDATA\",\"Authorization: Bearer %s\"", API_KEY);    
+    sendCommand(buf, 1000);
 
     // load body — 10000ms window to input data
     snprintf(buf, sizeof(buf), "AT+HTTPDATA=%d,15000", bodyLen);
@@ -147,16 +153,17 @@ void sendHTTPPost(const char* url, const char* body) {
 }
 
 
-String buildJSON(int siteID, float humidity, float temp_f, float precipitation, float Qin, float Qout, float Qinf)
+String buildJSON()
   {
+
+  // {"sample_id":44,"phos":"1","nitro":"1","tss":"0","date_created":"7/16/2025"}
+
   String json = "{";
-  json += "\"siteId\":" + String(siteID) + ",";
-  json += "\"temp_f\":" + String(temp_f, 2) + ",";
-  json += "\"inflow\":" + String(Qin, 6) + ",";
-  json += "\"outflow\":" + String(Qout, 6) + ",";
-  json += "\"downflow\":" + String(Qinf, 6);
-  json += "\"humidity\":" + String(humidity, 2) + ",";
-  json += "\"precipitation\":" + String(precipitation, 4) + ",";
+  json += "\"sample_id\":" + String(44) + ",";
+  json += "\"phos\":" + String(1) + ",";
+  json += "\"nitro\":" + String(1) + ",";
+  json += "\"tss\":" + String(0) + ",";
+  json += "\"date_created\": \"7/16/2025\"";
   json += "}";
 
   return json;
