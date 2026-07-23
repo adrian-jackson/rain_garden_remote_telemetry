@@ -3,5 +3,11 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.vscode
+data
+dump
 secrets.py
 apikey.h
+previous_scripts
+documentation/calculations
+from_team
