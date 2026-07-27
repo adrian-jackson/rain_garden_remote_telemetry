@@ -36,7 +36,10 @@ def post_data():
     data = request.get_json()
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("INSERT INTO sensor_data (data) VALUES (%s) RETURNING id, created_at", [json.dumps(data)])
+    cur.execute('''    
+        INSERT INTO sensor_data (site_id, temp_f, humidity, precipitation, inflow, outflow, downflow)    
+        VALUES (%s, %s, %s, %s, %s, %s, %s)    
+        RETURNING id, timestamp''', (data['siteId'], data['temp_f'], data['humidity'], data['precipitation'], data['inflow'], data['outflow'], data['downflow']))
     row_id, created_at = cur.fetchone()
     conn.commit()
     cur.close(); conn.close()
