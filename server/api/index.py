@@ -2,7 +2,13 @@
 from flask import Flask, request, jsonify, send_from_directory
 import json, os, psycopg2
 from flask_cors import CORS
-from api_key import API_KEY
+from dotenv import load_dotenv
+
+try:
+    from api_key import API_KEY
+except ImportError:
+    load_dotenv()  # Load environment variables from .env file
+    API_KEY = os.getenv('API_KEY')
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
