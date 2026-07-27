@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 try:
     from secrets import API_KEY
     from secrets import DATABASE_URL
-except ModuleNotFoundError or ImportError:
+except:
     load_dotenv()  # Load environment variables from .env file
     API_KEY = os.getenv('API_KEY')
     DATABASE_URL = os.getenv('DATABASE_URL')
