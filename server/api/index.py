@@ -1,5 +1,5 @@
 # api/index.py
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import json, os, psycopg2
 from flask_cors import CORS
 
@@ -12,7 +12,7 @@ def get_conn():
 
 @app.route('/')
 def index():    
-    return app.send_static_file('index.html')
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/test')
 def test():    
