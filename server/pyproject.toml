@@ -1,6 +1,10 @@
 [project]
 name = "server"
 version = "0.1.0"
+dependencies = [
+    "flask",
+    "psycopg2-binary"
+]
 
 [tool.vercel]
 entrypoint = "api.data:handler"
