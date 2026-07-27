@@ -1,11 +1,15 @@
 from flask import Flask, request, jsonify
 import json, os, psycopg2
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='public', static_url_path='')
 DATABASE_URL = os.environ["DATABASE_URL"]
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
+
+@app.route('/')
+def index():    
+    return app.send_static_file('index.html')
 
 @app.route("/api/data", methods=["POST"])
 def post_data():
