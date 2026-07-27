@@ -122,9 +122,12 @@ void sendHTTPPost(const char* url, const char* body) {
     int bodyLen = strlen(body);
     char buf[128];
 
+    sendCommand("AT+HTTPSSL=1", 1000);
+
     // init HTTP
-    sendCommand("AT+HTTPINIT", 1000);
+    sendCommand("AT+HTTPINIT", 1000); //If AT+HTTPACTION=1 returns a non-200 or a connection error dig into SSL config rather than debug the server side.
     sendCommand("AT+HTTPPARA=\"CID\",1", 1000);
+    sendCommand("AT+HTTPPARA=\"SSLCFG\",1", 1000);    //use correct SSL config
 
 
 
@@ -153,17 +156,16 @@ void sendHTTPPost(const char* url, const char* body) {
 }
 
 
-String buildJSON()
-  {
-
-  // {"sample_id":44,"phos":"1","nitro":"1","tss":"0","date_created":"7/16/2025"}
-
+String buildJSON(int siteID, float humidity, float temp_f, float precipitation, float Qin, float Qout, float Qinf)
+{
   String json = "{";
-  json += "\"sample_id\":" + String(44) + ",";
-  json += "\"phos\":" + String(1) + ",";
-  json += "\"nitro\":" + String(1) + ",";
-  json += "\"tss\":" + String(0) + ",";
-  json += "\"date_created\": \"7/16/2025\"";
+  json += "\"siteId\":" + String(siteID) + ",";
+  json += "\"temp_f\":" + String(temp_f, 2) + ",";
+  json += "\"inflow\":" + String(Qin, 6) + ",";
+  json += "\"outflow\":" + String(Qout, 6) + ",";
+  json += "\"downflow\":" + String(Qinf, 6) + ",";
+  json += "\"humidity\":" + String(humidity, 2) + ",";
+  json += "\"precipitation\":" + String(precipitation, 4);
   json += "}";
 
   return json;
@@ -199,20 +201,13 @@ void setup() {
   shieldSerial.println("AT+IPR=9600");
   delay(100);
   shieldSerial.begin(9600);
-}
 
-void loop() {
-  // Keep modem connection alive and monitor serial
-  if (shieldSerial.available()) {
-    String response = shieldSerial.readStringUntil('\n');
-    Serial.print("< ");
-    Serial.println(response);
-  }
-  
-  // Send AT every 5 seconds to keep connection active
-  static unsigned long lastCheck = 0;
-  if (millis() - lastCheck > 5000) {
-    sendCommand("AT", 1000);
+  // debug
+  sendCommand("AT+CGMR", 1000); // check firmware version
+  sendCommand("AT+CSSLCFG=\"sslversion\",1,3", 1000); // set SSL version to TLS 1.2
+
+  //config
+  sendCommand("AT", 1000);
     lastCheck = millis();
     //set func
     sendCommand("AT+GSN", 1000);
@@ -237,11 +232,25 @@ void loop() {
 
     //check signal strength
     sendCommand("AT+CSQ",1000);
+}
+
+void loop() {
+  // Keep modem connection alive and monitor serial
+  if (shieldSerial.available()) {
+    String response = shieldSerial.readStringUntil('\n');
+    Serial.print("< ");
+    Serial.println(response);
+  }
+  
+  // Send AT every 5 seconds to keep connection active
+  static unsigned long lastCheck = 0;
+  if (millis() - lastCheck > POST_INTERVAL_MS) {
+    
 
     //HTTP STACK
     //demo to verify func
     if(false){
-      sendCommand("AT+HTTPINIT", 1000);
+      sendCommand("AT+HTTPINIT", 1000);  
       sendCommand("AT+HTTPPARA=\"CID\",1", 1000);
       sendCommand("AT+HTTPPARA=\"URL\",\"http://httpbin.org/get\"", 1000);
       sendCommand("AT+HTTPACTION=0", 1000); //0=GET, 1=POST, 2=HEAD
