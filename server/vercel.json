@@ -1,7 +1,5 @@
 {
   "functions": {
-    "api/data.py": {
-      "runtime": "python3.12"
-    }
+    "api/data.py": {}
   }
 }
