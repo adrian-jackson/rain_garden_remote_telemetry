@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 import json, os, psycopg2
 
+#force redeploy dummy comment
+
 app = Flask(__name__, static_folder='public', static_url_path='')
 DATABASE_URL = os.environ["DATABASE_URL"]
 
