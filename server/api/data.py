@@ -5,6 +5,8 @@ import psycopg2
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
+#test line to enforce vercel re upload
+
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
