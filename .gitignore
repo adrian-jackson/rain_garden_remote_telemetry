@@ -7,7 +7,7 @@
 firmware/data
 firmware/dump
 firmware/src/secrets.py
-firmware/src/apikey.h
+firmware/src/api_key.h
 firmware/previous_scripts
 firmware/documentation/calculations
 firmware/from_team
