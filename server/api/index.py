@@ -2,6 +2,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 import json, os, psycopg2
 from flask_cors import CORS
+from api_key import API_KEY
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
@@ -21,6 +22,9 @@ def test():
 
 @app.route("/api/data", methods=["POST"])
 def post_data():
+    provided_key = request.headers.get('X-API-Key')
+    if not provided_key or provided_key != API_KEY:        
+        return jsonify({'error': 'Unauthorized'}), 401
     data = request.get_json()
     conn = get_conn()
     cur = conn.cursor()

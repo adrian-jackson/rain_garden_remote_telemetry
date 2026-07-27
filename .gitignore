@@ -19,3 +19,5 @@ __pychace__/
 .vercel/
 
 /server/notes.txt
+
+/server/api_key.py
