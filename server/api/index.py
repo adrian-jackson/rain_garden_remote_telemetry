@@ -11,8 +11,17 @@ def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
 @app.route('/')
-def index():    
-    return send_from_directory(app.static_folder, 'index.html')
+def index():
+    import os
+    public_path = os.path.join(os.path.dirname(__file__), '..', 'public', 'index.html')
+    app.logger.info(f"Attempting to serve from: {public_path}")
+    app.logger.info(f"File exists: {os.path.exists(public_path)}")
+    
+    if not os.path.exists(public_path):
+        return jsonify({"error": f"index.html not found at {public_path}"}), 500
+    
+    return app.send_static_file('index.html')
+
 
 @app.route('/test')
 def test():    
