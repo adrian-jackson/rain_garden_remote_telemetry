@@ -42,10 +42,27 @@ def post_data():
 
 @app.route("/api/data", methods=["GET"])
 def get_data():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, data, created_at FROM entries ORDER BY created_at DESC")
-    rows = cur.fetchall()
-    cur.close(); conn.close()
-    entries = [{"id": r[0], "data": r[1], "created_at": str(r[2])} for r in rows]
-    return jsonify({"entries": entries})
+    # GET: Retrieve last N records
+    limit = request.args.get('limit', 50, type=int)
+    
+    try:
+        conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT site_id, temp_f, humidity, precipitation, inflow, outflow, downflow, timestamp
+            FROM sensor_data
+            ORDER BY timestamp DESC
+            LIMIT %s
+        ''', (limit,))
+        
+        columns = [desc[0] for desc in cur.description]
+        records = [dict(zip(columns, row)) for row in cur.fetchall()]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(records), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+

@@ -1,44 +1,392 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Data Store</title>
-  <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
-    input, button { padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
-    #entries { margin-top: 20px; }
-    .entry { background: #f4f4f4; padding: 8px; margin: 6px 0; border-radius: 4px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rain Garden Telemetry</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .controls button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .controls button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .controls button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 0.95em;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status.loading::after {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border: 2px solid #667eea;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status.error {
+            color: #dc3545;
+        }
+
+        .status.success {
+            color: #28a745;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            padding: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95em;
+        }
+
+        thead {
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #dee2e6;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            color: #555;
+        }
+
+        tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafbfc;
+        }
+
+        .row-num {
+            font-weight: 600;
+            color: #999;
+            width: 50px;
+        }
+
+        .numeric {
+            font-family: 'Monaco', 'Courier New', monospace;
+            text-align: right;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 30px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state h2 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        footer {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            font-size: 0.9em;
+            color: #999;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .controls button {
+                width: 100%;
+            }
+
+            .status {
+                margin-left: 0;
+                justify-content: center;
+            }
+
+            th, td {
+                padding: 10px;
+                font-size: 0.85em;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>Submit Data</h1>
-  <input id="msgInput" placeholder="Enter a message" />
-  <button onclick="submitData()">Submit</button>
+    <div class="container">
+        <header>
+            <h1>🌧️ Rain Garden Telemetry</h1>
+            <p>Real-time sensor data monitoring</p>
+        </header>
 
-  <div id="entries"></div>
+        <div class="controls">
+            <button id="refreshBtn">↻ Refresh Data</button>
+            <button id="downloadBtn">⬇ Download CSV (All)</button>
+            <div class="status" id="status">Ready</div>
+        </div>
 
-  <script>
-    async function submitData() {
-      const msg = document.getElementById('msgInput').value;
-      await fetch('/api/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, time: new Date().toISOString() })
-      });
-      document.getElementById('msgInput').value = '';
-      loadEntries();
-    }
+        <div class="table-wrapper">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="row-num">#</th>
+                        <th>Site ID</th>
+                        <th class="numeric">Temp (°F)</th>
+                        <th class="numeric">Humidity (%)</th>
+                        <th class="numeric">Precipitation (in)</th>
+                        <th class="numeric">Inflow (CFS)</th>
+                        <th class="numeric">Outflow (CFS)</th>
+                        <th class="numeric">Downflow (CFS)</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
-    async function loadEntries() {
-      const res = await fetch('/api/data');
-      const data = await res.json();
-      const container = document.getElementById('entries');
-      container.innerHTML = data.entries.map(e => 
-        `<div class="entry">${JSON.stringify(e)}</div>`
-      ).join('');
-    }
+        <footer>
+            <p>Last updated: <span id="lastUpdated">Never</span></p>
+        </footer>
+    </div>
 
-    loadEntries();
-  </script>
+    <script>
+        const TABLE_BODY = document.getElementById('tableBody');
+        const REFRESH_BTN = document.getElementById('refreshBtn');
+        const DOWNLOAD_BTN = document.getElementById('downloadBtn');
+        const STATUS = document.getElementById('status');
+        const LAST_UPDATED = document.getElementById('lastUpdated');
+
+        function setStatus(message, type = 'default') {
+            STATUS.textContent = message;
+            STATUS.className = `status ${type}`;
+        }
+
+        async function fetchData(limit = 50) {
+            setStatus('Loading...', 'loading');
+            try {
+                  const response = await fetch(`/api/data?limit=${limit}`);
+
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const data = Array.isArray(result) ? result : result.data || [];
+
+                renderTable(data);
+                setStatus(`${data.length} records loaded`, 'success');
+                LAST_UPDATED.textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                setStatus(`Error: ${error.message}`, 'error');
+                TABLE_BODY.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px; color: #dc3545;">
+                            Failed to load data. Check console for details.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderTable(data) {
+            if (!data || data.length === 0) {
+                TABLE_BODY.innerHTML = `
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-state">
+                                <h2>No Data Available</h2>
+                                <p>Start posting sensor data to see it here.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            TABLE_BODY.innerHTML = data
+                .reverse() // Show newest first
+                .map((record, index) => `
+                    <tr>
+                        <td class="row-num">${index + 1}</td>
+                        <td>${record.siteId ?? record.site_id ?? '—'}</td>
+                        <td class="numeric">${(record.temp_f ?? record.temperature ?? '—').toFixed(2)}</td>
+                        <td class="numeric">${(record.humidity ?? '—').toFixed(2)}</td>
+                        <td class="numeric">${(record.precipitation ?? '—').toFixed(4)}</td>
+                        <td class="numeric">${(record.inflow ?? record.Qin ?? '—').toFixed(6)}</td>
+                        <td class="numeric">${(record.outflow ?? record.Qout ?? '—').toFixed(6)}</td>
+                        <td class="numeric">${(record.downflow ?? record.Qinf ?? '—').toFixed(6)}</td>
+                        <td>${record.timestamp ? new Date(record.timestamp).toLocaleString() : '—'}</td>
+                    </tr>
+                `)
+                .join('');
+        }
+
+        async function downloadCSV() {
+            setStatus('Generating CSV...', 'loading');
+            try {
+                const response = await fetch('/api/data?limit=999999', {
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const records = Array.isArray(data) ? data : data.data || [];
+
+                if (records.length === 0) {
+                    setStatus('No data to download', 'error');
+                    return;
+                }
+
+                // Build CSV
+                const headers = ['Site ID', 'Temp (°F)', 'Humidity (%)', 'Precipitation (in)', 'Inflow (CFS)', 'Outflow (CFS)', 'Downflow (CFS)', 'Timestamp'];
+                const rows = records.map(r => [
+                    r.siteId ?? r.site_id ?? '',
+                    r.temp_f ?? r.temperature ?? '',
+                    r.humidity ?? '',
+                    r.precipitation ?? '',
+                    r.inflow ?? r.Qin ?? '',
+                    r.outflow ?? r.Qout ?? '',
+                    r.downflow ?? r.Qinf ?? '',
+                    r.timestamp ?? ''
+                ]);
+
+                const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+                // Download
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `telemetry-${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+
+                setStatus(`Downloaded ${records.length} records`, 'success');
+            } catch (error) {
+                console.error('Error downloading CSV:', error);
+                setStatus(`Download failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Event listeners
+        REFRESH_BTN.addEventListener('click', () => fetchData(50));
+        DOWNLOAD_BTN.addEventListener('click', downloadCSV);
+
+        // Load data on page load
+        fetchData(50);
+    </script>
 </body>
 </html>

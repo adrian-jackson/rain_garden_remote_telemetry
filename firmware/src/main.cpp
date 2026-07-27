@@ -13,14 +13,18 @@ SoftwareSerial shieldSerial(10, 11);
 #define APN              "hologram"          // ← your SIM card APN
 #define SERVER_HOST      "rcewrp-backend-23923596738.us-central1.run.app"       // ← no https://, no trailing slash
 #define SERVER_PATH      "/admin/sample"                  // ← endpoint path for POST
-#define POST_INTERVAL_MS 30000UL             // ← 30 seconds
-#define BOTLETICS_SSL 0
+#define POST_INTERVAL_MS  1800000             // ← 30 minutes in ms
+#define TEMP_SERVER_HOST "https://rain-garden-remote-telemetry-iiwrfszux-adrianjackson.vercel.app/"
+#define TEMP_SERVER_PATH "api/data"
+
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Demo Values ──────────────────────────────────────────────────────
+// ── Consts and Demo Values ──────────────────────────────────────────────────────
 const char *API_KEY = ADMIN_PANEL_API_KEY;
+const char *TEMP_API_KEY = TEMP_API_KEY;
 const char *uniqueSiteId = "test";
 int testSiteID = 103;
+int bartleSiteID = 000;
 float temp_current = 1.0;
 float inflow_current = 1.0;
 float outflow_current = 1.0;
@@ -65,33 +69,6 @@ void testBaudRate(long baudrate) {
   }
 }
 
-void attemptConnection(long baudrate) {
-  shieldSerial.begin(baudrate);
-  delay(500);
-  
-  // Send AT command and wait for response
-  shieldSerial.println("AT");
-  
-  unsigned long startTime = millis();
-  String response = "";
-  
-  // Wait up to 2 seconds for a response
-  while (millis() - startTime < 2000) {
-    if (shieldSerial.available()) {
-      char c = shieldSerial.read();
-      response += c;
-      
-      // Check if we got an OK
-      if (response.indexOf("OK") != -1) {
-        Serial.print("✓ Connected at ");
-        Serial.print(baudrate);
-        Serial.println(" baud!");
-        Serial.println("Response: " + response);
-        return;
-      }
-    }
-  }
-  
   Serial.print("✗ No response at ");
   Serial.print(baudrate);
   Serial.println(" baud");
@@ -118,7 +95,7 @@ void sendCommand(String command, unsigned long timeout) {
   Serial.println();
 }
 
-void sendHTTPPost(const char* url, const char* body) {
+void sendHTTPPost(const char* url, const char* body, bool temp = false) {
     int bodyLen = strlen(body);
     char buf[128];
 
@@ -129,13 +106,20 @@ void sendHTTPPost(const char* url, const char* body) {
     sendCommand("AT+HTTPPARA=\"CID\",1", 1000);
     sendCommand("AT+HTTPPARA=\"SSLCFG\",1", 1000);    //use correct SSL config
 
-
-
     snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"URL\",\"%s\"", url);
     sendCommand(buf, 1000);
 
     sendCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
 
+    if(!temp){
+        // Add custom Authorization header        
+        snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"USERDATA\",\"X-API-Key: %s\"", API_KEY);    
+        sendCommand(buf, 1000);
+    } else {
+        // Add custom Authorization header        
+        snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"USERDATA\",\"X-API-Key: %s\"", TEMP_API_KEY);    
+        sendCommand(buf, 1000);
+    }
     // Add custom Authorization header        
     snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"USERDATA\",\"Authorization: Bearer %s\"", API_KEY);    
     sendCommand(buf, 1000);
@@ -246,22 +230,6 @@ void loop() {
   static unsigned long lastCheck = 0;
   if (millis() - lastCheck > POST_INTERVAL_MS) {
     
-
-    //HTTP STACK
-    //demo to verify func
-    if(false){
-      sendCommand("AT+HTTPINIT", 1000);  
-      sendCommand("AT+HTTPPARA=\"CID\",1", 1000);
-      sendCommand("AT+HTTPPARA=\"URL\",\"http://httpbin.org/get\"", 1000);
-      sendCommand("AT+HTTPACTION=0", 1000); //0=GET, 1=POST, 2=HEAD
-      //; wait for +HTTPACTION: 0,200,<len>
-      sendCommand("AT+HTTPREAD", 1000);
-      sendCommand("AT+HTTPTERM", 1000);
-      sendCommand("AT+SAPBR=0,1", 1000);
-    }
-
-    //test POST
-    // sendHTTPPost("http://httpbin.org/post", "{\"test\":\"data\",\"key\":\"value\"}");
     String json = buildJSON(
       testSiteID,
       humidity_current,
@@ -272,6 +240,7 @@ void loop() {
       downflow_current
     );
 
+    sendTempHTTPPost(TEMP_SERVER_HOST TEMP_SERVER_PATH, json.c_str());
     sendHTTPPost("http://rcewrp-backend-23923596738.us-central1.run.app/upload", json.c_str());
 
 
