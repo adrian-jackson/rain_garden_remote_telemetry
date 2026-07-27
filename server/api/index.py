@@ -14,6 +14,10 @@ def get_conn():
 def index():    
     return app.send_static_file('index.html')
 
+@app.route('/test')
+def test():    
+    return jsonify({"status": "Flask is working"})
+
 @app.route("/api/data", methods=["POST"])
 def post_data():
     data = request.get_json()
