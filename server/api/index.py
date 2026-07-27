@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 try:
     from api_key import API_KEY
-except:
+except ModuleNotFoundError:
     load_dotenv()  # Load environment variables from .env file
     API_KEY = os.getenv('API_KEY')
 
