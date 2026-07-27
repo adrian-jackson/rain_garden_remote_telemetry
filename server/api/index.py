@@ -54,7 +54,7 @@ def get_data():
         conn = psycopg2.connect(os.getenv('DATABASE_URL'))
         cur = conn.cursor()
         cur.execute('''
-            SELECT siteId, temp_f, humidity, precipitation, inflow, outflow, downflow, timestamp
+            SELECT siteid, temp_f, humidity, precipitation, inflow, outflow, downflow, timestamp
             FROM sensor_data
             ORDER BY timestamp DESC
             LIMIT %s
