@@ -1,9 +1,10 @@
+# api/index.py
 from flask import Flask, request, jsonify
 import json, os, psycopg2
+from flask_cors import CORS
 
-#force redeploy dummy comment
-
-app = Flask(__name__, static_folder='public', static_url_path='')
+app = Flask(__name__, static_folder='../public', static_url_path='')
+CORS(app)
 DATABASE_URL = os.environ["DATABASE_URL"]
 
 def get_conn():
