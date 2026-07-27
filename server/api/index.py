@@ -5,14 +5,16 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 try:
-    from api_key import API_KEY
+    from secrets import API_KEY
+    from secrets import DATABASE_URL
 except ModuleNotFoundError:
     load_dotenv()  # Load environment variables from .env file
     API_KEY = os.getenv('API_KEY')
+    DATABASE_URL = os.getenv('DATABASE_URL')
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
-DATABASE_URL = os.environ["DATABASE_URL"]
+
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -64,5 +66,6 @@ def get_data():
         return jsonify(records), 200
     
     except Exception as e:
+        print(f"Error: {e}")  # Show in Vercel logs
         return jsonify({'error': str(e)}), 500
 

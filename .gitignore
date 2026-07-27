@@ -21,3 +21,4 @@ __pychace__/
 /server/notes.txt
 
 /server/api_key.py
+/server/secrets.py
