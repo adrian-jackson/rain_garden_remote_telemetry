@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, send_from_directory
 import json, os, psycopg2
 from flask_cors import CORS
 
-app = Flask(__name__, static_folder='../public', static_url_path='')
+app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -11,16 +11,8 @@ def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
 @app.route('/')
-def index():
-    import os
-    public_path = os.path.join(os.path.dirname(__file__), '..', 'public', 'index.html')
-    app.logger.info(f"Attempting to serve from: {public_path}")
-    app.logger.info(f"File exists: {os.path.exists(public_path)}")
-    
-    if not os.path.exists(public_path):
-        return jsonify({"error": f"index.html not found at {public_path}"}), 500
-    
-    return app.send_static_file('index.html')
+def index():    
+    return send_from_directory('.', 'index.html')
 
 
 @app.route('/test')
