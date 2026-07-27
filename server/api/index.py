@@ -59,6 +59,7 @@ def get_data():
         
         columns = [desc[0] for desc in cur.description]
         records = [dict(zip(columns, row)) for row in cur.fetchall()]
+        print(f"Fetched {len(records)} records")  # Add this line
         
         cur.close()
         conn.close()
