@@ -39,7 +39,7 @@ def post_data():
     cur.execute('''    
         INSERT INTO sensor_data (siteId, temp_f, humidity, precipitation, inflow, outflow, downflow)    
         VALUES (%s, %s, %s, %s, %s, %s, %s)    
-        RETURNING id, timestamp''', (data['siteId'], data['temp_f'], data['humidity'], data['precipitation'], data['inflow'], data['outflow'], data['downflow']))
+        RETURNING id, timestamp''', (data['siteid'], data['temp_f'], data['humidity'], data['precipitation'], data['inflow'], data['outflow'], data['downflow']))
     row_id, created_at = cur.fetchone()
     conn.commit()
     cur.close(); conn.close()

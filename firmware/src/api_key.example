@@ -1,1 +1,2 @@
 #define ADMIN_PANEL_API_KEY = "your_api_key"
+#define TEMP_API_KEY = "your_temp_api_key"
