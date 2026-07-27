@@ -1,9 +1,0 @@
--> unit testing https://docs.platformio.org/en/latest/tutorials/core/unit_testing_blink.html
-
-HEY!!! THE SETUP IS: 
-WALL POWER OFF!!!!!
-LIPO PLGGUED INTO JST
-5V CONNECTED
-ARDUINO POWERED OVER USB
-
-->IMPLEMENT WAIT FOR HTTP RESPONSE NUM

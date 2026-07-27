@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Data Store</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    input, button { padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+    #entries { margin-top: 20px; }
+    .entry { background: #f4f4f4; padding: 8px; margin: 6px 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Submit Data</h1>
+  <input id="msgInput" placeholder="Enter a message" />
+  <button onclick="submitData()">Submit</button>
+
+  <div id="entries"></div>
+
+  <script>
+    async function submitData() {
+      const msg = document.getElementById('msgInput').value;
+      await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, time: new Date().toISOString() })
+      });
+      document.getElementById('msgInput').value = '';
+      loadEntries();
+    }
+
+    async function loadEntries() {
+      const res = await fetch('/api/data');
+      const data = await res.json();
+      const container = document.getElementById('entries');
+      container.innerHTML = data.entries.map(e => 
+        `<div class="entry">${JSON.stringify(e)}</div>`
+      ).join('');
+    }
+
+    loadEntries();
+  </script>
+</body>
+</html>
