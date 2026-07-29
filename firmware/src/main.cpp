@@ -34,10 +34,12 @@ const uint8_t PIN_PSI_AIR = A1;
 #define APN              "hologram"          // ← your SIM card APN
 #define SERVER_HOST      "rcewrp-backend-23923596738.us-central1.run.app"       // ← no https://, no trailing slash
 #define SERVER_PATH      "/admin/sample"                  // ← endpoint path for POST
-#define POST_INTERVAL_MS  1800000             // ← 30 minutes in ms
 #define TEMP_SERVER_HOST "https://rain-garden-remote-telemetry-iiwrfszux-adrianjackson.vercel.app/"
 #define TEMP_SERVER_PATH "api/data"
 #define TEMP_FLAG 1
+#define POST_INTERVAL_MS  1800000               // 30 minutes in ms
+#define MODEM_RESTART_INTERVAL_MS  43200000UL   // 12 hours in ms
+#define KEEPALIVE_INTERVAL_MS  300000UL         // 5 minutes in ms
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Consts and Demo Values ──────────────────────────────────────────────────────
@@ -45,13 +47,15 @@ const char *API_KEY = ADMIN_PANEL_API_KEY;
 const char *TEMP_API_KEY = UPLOAD_TEMP_API_KEY;
 const char *uniqueSiteId = "test";
 int testSiteID = 103;
-int bartleSiteID = 000;
+int bartleSiteID = 1;
 float temp_demo = 1.0;
 float inflow_demo = 1.0;
 float outflow_demo = 1.0;
 float downflow_demo = 1.0;
 float humidity_demo = 1.0;
 float precipitation_demo = 1.0;
+unsigned long lastModemRestartMs = 0;
+unsigned long lastKeepaliveMs = 0;
 // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -289,6 +293,39 @@ void sendCommand(String command, unsigned long timeout) {
   Serial.println();
 }
 
+void initModem() {
+  pinMode(PWRKEY, OUTPUT);
+  digitalWrite(PWRKEY, LOW);
+  delay(1000);
+  digitalWrite(PWRKEY, HIGH);
+
+  shieldSerial.begin(9600); // already know working baud from earlier testing
+
+  // debug
+  sendCommand("AT+CGMR", 1000);
+  sendCommand("AT+CSSLCFG=\"sslversion\",1,3", 1000);
+
+  sendCommand("AT", 1000);
+  sendCommand("AT+GSN", 1000);
+  sendCommand("AT+CFUN=1", 1000);
+
+  // --- TEARDOWN (ignore errors on all of these) ---
+  sendCommand("AT+HTTPTERM", 1000);
+  sendCommand("AT+SAPBR=0,1", 1000);
+  sendCommand("AT+CGATT=0", 3000);
+
+  // enable GPRS
+  sendCommand("AT+CGATT=1", 5000);
+  sendCommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", 1000);
+  sendCommand("AT+SAPBR=3,1,\"APN\",\"hologram\"", 1000);
+  sendCommand("AT+SAPBR=1,1", 10000);
+
+  sendCommand("AT+CREG?", 1000);
+  sendCommand("AT+CGREG?", 1000);
+  sendCommand("AT+SAPBR=2,1", 1000);
+  sendCommand("AT+CSQ", 1000);
+}
+
 void sendHTTPPost(const char* url, const char* body, bool temp = false) {
     int bodyLen = strlen(body);
     char buf[256];
@@ -314,12 +351,10 @@ void sendHTTPPost(const char* url, const char* body, bool temp = false) {
         snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"USERDATA\",\"X-API-Key: %s\"", TEMP_API_KEY);    
         sendCommand(buf, 1000);
     }
-    // Add custom Authorization header        
-    snprintf(buf, sizeof(buf), "AT+HTTPPARA=\"USERDATA\",\"Authorization: Bearer %s\"", API_KEY);    
-    sendCommand(buf, 1000);
 
     // load body — 10000ms window to input data
-    snprintf(buf, sizeof(buf), "AT+HTTPDATA=%d,15000", bodyLen);
+    snprintf(buf, sizeof(buf), "AT+HTTPDATA=%d,15000", bodyLen); 
+    // if issues, can try snprintf(buf, sizeof(buf), "AT+HTTPDATA=%d,15000", bodyLen + 2); to account for crlf
     sendCommand(buf, 1000);          // modem responds with DOWNLOAD
     sendCommand(body, 3000);         // send body, wait for OK
 
@@ -329,7 +364,7 @@ void sendHTTPPost(const char* url, const char* body, bool temp = false) {
 
     // teardown
     sendCommand("AT+HTTPTERM", 1000);
-    sendCommand("AT+SAPBR=0,1", 1000);
+    //sendCommand("AT+SAPBR=0,1", 1000); #keep bearer alive - consider doing full teardown for power saving
 
 }
 
@@ -401,35 +436,9 @@ void setup() {
   delay(100);
   shieldSerial.begin(9600);
 
-  // debug
-  sendCommand("AT+CGMR", 1000); // check firmware version
-  sendCommand("AT+CSSLCFG=\"sslversion\",1,3", 1000); // set SSL version to TLS 1.2
-
-  //config
-  sendCommand("AT", 1000);
-  //set func
-  sendCommand("AT+GSN", 1000);
-  sendCommand("AT+CFUN=1", 1000);
-
-  // --- TEARDOWN (ignore errors on all of these) ---
-  sendCommand("AT+HTTPTERM", 1000);
-  sendCommand("AT+SAPBR=0,1", 1000);
-  sendCommand("AT+CGATT=0", 3000);
-
-  //enable GPRS
-  sendCommand("AT+CGATT=1", 5000);
-  sendCommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"",1000);
-  sendCommand("AT+SAPBR=3,1,\"APN\",\"hologram\"",1000);
-  sendCommand("AT+SAPBR=1,1",10000);
-  
-  //query network registration
-  sendCommand("AT+CREG?", 1000);   // GSM registration - need +CREG: 0,1 or 0,5
-  sendCommand("AT+CGREG?", 1000); // GPRS registration - need +CGREG: 0,1 or 0,5
-
-  sendCommand("AT+SAPBR=2,1",1000);
-
-  //check signal strength
-  sendCommand("AT+CSQ",1000);
+  initModem();
+  lastModemRestartMs = millis();
+  lastKeepaliveMs = millis();
 
   // ───────────────────────────────────────────────────────────────────────
 
@@ -437,6 +446,20 @@ void setup() {
 }
 
 void loop() {
+
+    // Periodic full modem restart (defends against silent bearer/registration drift)
+  if (millis() - lastModemRestartMs >= MODEM_RESTART_INTERVAL_MS) {
+    Serial.println(F("[MODEM] 12h elapsed — forcing full restart"));
+    initModem();
+    lastModemRestartMs = millis();
+    lastKeepaliveMs = millis();
+  }
+
+  // Lightweight keepalive to reset carrier idle timers between posts
+  if (millis() - lastKeepaliveMs >= KEEPALIVE_INTERVAL_MS) {
+    sendCommand("AT+CSQ", 1000);
+    lastKeepaliveMs = millis();
+  }
 
   // 1) Read temp/humidity
   float humidity = 0.0f;
@@ -489,14 +512,15 @@ void loop() {
       temp_f,
       precipitation,
       Qin,
-      Qinf,
-      Qout
+      Qout,
+      Qinf
     );
 
-    sendTempHTTPPost(TEMP_SERVER_HOST TEMP_SERVER_PATH, json.c_str());
-    sendHTTPPost("http://rcewrp-backend-23923596738.us-central1.run.app/upload", json.c_str());
-
+    sendHTTPPost(TEMP_SERVER_HOST TEMP_SERVER_PATH, json.c_str(), true);
+    //sendHTTPPost("http://rcewrp-backend-23923596738.us-central1.run.app/upload", json.c_str(), false);
 
   }
+  delay(200);
+
 }
 
